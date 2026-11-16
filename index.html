@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#3d6b2a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Hive Keeper</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="fade"></div>
+
+  <!-- In-game status display -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="stat">Level <b id="hudLevel">1</b><span id="hudLevelMax">/10</span></div>
+      <div class="stat">Score <b id="hudScore">0</b></div>
+      <div class="stat">🍯 <b id="hudHoney">0</b></div>
+      <div class="stat ltr hidden" id="hudCombo"></div>
+      <div class="stat ltr hidden" id="hudBuffs"></div>
+      <div class="hud-buttons">
+        <button id="btnPause" class="icon-btn" aria-label="Pause">⏸</button>
+        <button id="btnMuteHud" class="icon-btn mute-btn" aria-label="Sound">🔊</button>
+      </div>
+    </div>
+    <div class="bars">
+      <div class="bar"><span class="bar-label">🐝 Bee</span><div class="track"><div id="barBee" class="fill bee"></div></div></div>
+      <div class="bar"><span class="bar-label">🍯 Hive</span><div class="track"><div id="barHive" class="fill hive"></div></div></div>
+    </div>
+    <div id="bossBar" class="hidden">
+      <div id="bossName">Boss</div>
+      <div class="track boss-track"><div id="barBoss" class="fill boss"></div></div>
+    </div>
+  </div>
+
+  <button id="btnPulse" class="hidden" aria-label="Buzz wave"><span>Buzz<br>Wave</span><div id="pulseFill"></div></button>
+
+  <button id="btnDash" class="hidden" aria-label="Dash"><span>Dash</span><div id="dashFill"></div></button>
+
+  <div id="banner" class="hidden"><div id="bannerTitle"></div><div id="bannerSub"></div></div>
+
+  <!-- Main menu -->
+  <div id="menu" class="screen">
+    <div class="panel">
+      <div class="logo">🐝</div>
+      <h1>Hive Keeper</h1>
+      <p class="tagline">The wasps are coming! Defend the hive for 10 levels.</p>
+      <p class="best" id="menuBest"></p>
+      <div class="diff-row">
+        <span>Difficulty:</span>
+        <button class="seg" data-diff="easy">Easy</button>
+        <button class="seg" data-diff="normal">Normal</button>
+        <button class="seg" data-diff="hard">Hard</button>
+      </div>
+      <button class="btn primary hidden" id="btnContinue">▶ Continue</button>
+      <button class="btn primary" id="btnStart">Start game</button>
+      <button class="btn" id="btnStory">📖 The fable</button>
+      <button class="btn" id="btnHowto">How to play</button>
+      <button class="btn" id="btnScores">High scores</button>
+      <button class="btn mute-btn" id="btnMuteMenu">🔊 Sound: on</button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div id="howto" class="screen hidden">
+    <div class="panel wide">
+      <h2>How to play</h2>
+      <ul class="howto-list">
+        <li><b>Move:</b> arrow keys or WASD on a computer. You can also click and hold the mouse. On a phone, drag a finger on the screen like a joystick.</li>
+        <li><b>Sting:</b> the bee automatically stings the nearest wasp.</li>
+        <li><b>Buzz wave:</b> Space or the round button. It pushes back and damages every wasp around you.</li>
+        <li><b>Dash:</b> Shift or the small button. A quick jump that dodges all damage.</li>
+        <li><b>Combo 🔥:</b> defeat wasps in a row without getting hit and your score is multiplied (up to x3).</li>
+        <li><b>Power-ups:</b> ⚡ double sting speed · 🛡️ shield · ❄️ freeze the wasps. They last a few seconds.</li>
+        <li><b>Honey 🍯:</b> defeated wasps drop honey. Collect it to buy repairs between levels.</li>
+        <li><b>Upgrades:</b> after each level you pick one upgrade.</li>
+        <li><b>Losing:</b> when the hive or the bee runs out of health.</li>
+        <li><b>Bosses:</b> big surprises are waiting on levels 5, 8 and 10…</li>
+        <li><b>Saving:</b> the game saves at the start of every level. You can close it and come back with "Continue".</li>
+        <li><b>Endless mode ♾️:</b> unlocks after you beat level 10.</li>
+        <li><b>Pause:</b> P or Esc.</li>
+      </ul>
+      <div class="legend">
+        <div><span class="dot" style="background:#f2b705"></span>Wasp – attacks the hive</div>
+        <div><span class="dot" style="background:#e0452b"></span>Fast wasp – chases the bee</div>
+        <div><span class="dot" style="background:#7a4a12"></span>Armored wasp – slow and tough</div>
+        <div><span class="dot" style="background:#7cb342"></span>Spitter wasp – attacks from afar</div>
+        <div><span class="dot" style="background:#b71c1c"></span>Bomb wasp – explodes on the hive</div>
+        <div><span class="dot" style="background:#8e24aa"></span>Mother wasp – splits into three</div>
+      </div>
+      <button class="btn primary" data-back>Back</button>
+    </div>
+  </div>
+
+  <!-- The fable -->
+  <div id="story" class="screen hidden">
+    <div class="panel wide">
+      <h2>📖 The Fable of the Hive Keeper</h2>
+      <div class="story-text">
+        <p>Once, in a wide field of flowers, stood a small and quiet hive. All summer long the bees gathered nectar, drop by drop.</p>
+        <p>The wasps from the forest looked at the honey with envy and said: <b>"Why work all summer, when we can simply take it?"</b></p>
+        <p>All the bees trembled, except one – the smallest of them. <b>"I am small,"</b> she said, <b>"but this home was built drop by drop, and I will guard it sting by sting."</b></p>
+        <p>And so she flew out alone to face the swarm…</p>
+      </div>
+      <button class="btn primary" id="btnStoryGo">To battle! 🐝</button>
+      <button class="btn small" data-back>Back to menu</button>
+    </div>
+  </div>
+
+  <!-- High scores -->
+  <div id="scores" class="screen hidden">
+    <div class="panel wide">
+      <h2>🏆 High scores</h2>
+      <div id="scoresTable"></div>
+      <button class="btn primary" data-back>Back</button>
+      <button class="btn small danger" id="btnClearScores">Reset table</button>
+    </div>
+  </div>
+
+  <!-- Upgrade screen -->
+  <div id="upgrade" class="screen hidden">
+    <div class="panel wide">
+      <h2 id="upTitle">Level complete!</h2>
+      <p id="upInfo" class="info"></p>
+      <div class="shop">
+        <div class="shop-title">Honey shop – you have <b id="upHoney">0</b> 🍯</div>
+        <div class="shop-row">
+          <button class="btn shop-btn" id="buyHive"></button>
+          <button class="btn shop-btn" id="buyBee"></button>
+        </div>
+      </div>
+      <h3>Pick one upgrade to continue:</h3>
+      <div id="cards" class="cards"></div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <div class="panel">
+      <h2>⏸ Paused</h2>
+      <button class="btn primary" id="btnResume">Resume</button>
+      <button class="btn mute-btn" id="btnMutePause">🔊 Sound: on</button>
+      <button class="btn" id="btnQuit">Quit to menu</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="gameover" class="screen hidden">
+    <div class="panel wide">
+      <h2 id="goTitle">Game over</h2>
+      <p id="goInfo" class="info"></p>
+      <div id="goNameBox" class="hidden">
+        <p>🎉 You made the high scores! What's your name?</p>
+        <div class="name-row">
+          <input id="goName" type="text" maxlength="14" placeholder="Your name" autocomplete="off">
+          <button class="btn primary small" id="btnSaveScore">Save</button>
+        </div>
+      </div>
+      <div id="goScores"></div>
+      <button class="btn primary hidden" id="btnEndless">♾️ Continue to endless mode</button>
+      <button class="btn primary" id="btnAgain">New game</button>
+      <button class="btn" id="btnMenu">Main menu</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
