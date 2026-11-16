@@ -31,6 +31,7 @@ const STORY_KEY = 'hiveKeeper.storySeen';
 const SAVE_KEY = 'hiveKeeper.run';
 const SETTINGS_KEY = 'hiveKeeper.settings';
 const PROFILE_KEY = 'hiveKeeper.profile';
+const TUT_KEY = 'hiveKeeper.tutorialDone';
 
 // ---------------- הגדרות ----------------
 const SETTINGS_DEFAULT = { music: 0.7, sfx: 0.85, shake: true, vibrate: true, numbers: true, lefty: false, quality: 'auto' };

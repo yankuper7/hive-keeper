@@ -5,10 +5,17 @@
 function tick(dt) {
   if (!G) return;
   stateTimer += dt;
-  if (state === 'playing') update(dt);
+  if (state === 'playing') { update(dt); if (G && G.tut && G.tut.finished) finishTutorial(); }
   else if (state === 'clear') { update(dt); if (stateTimer > 1.8) afterClear(); }
   else if (state === 'dying') { if (stateTimer > 1.6) endGame(false); }
   if (G && state !== 'paused' && state !== 'upgrade' && state !== 'over') updateEffects(dt);
+}
+
+function musicTrack() {
+  if (victoryOpen) return 'victory';
+  if (!G || state === 'over') return 'menu';
+  if (G.boss) return BOSS_TRACKS[G.boss.kind] || 'emperor';
+  return levelTrack(G.level);
 }
 
 function frame(now) {
@@ -27,11 +34,12 @@ function frame(now) {
     let gdt = dt;
     if (slowMo > 0) { slowMo -= dt; gdt *= 0.35; }
     for (let i = 0; i < timeScale; i++) tick(gdt);
+    if (victoryOpen) celebrate(dt);
     updateEnv(dt, state === 'playing');
     if (state === 'playing') perfSample(raw);
     updateHud();
-    // מוזיקה: לפי הנוף, עם רצועת בוס, ועוצמה לפי כמות הצרעות
-    Sound.setTrack(!G || state === 'over' ? 'menu' : G.boss ? 'boss' : env.theme.track);
+    // מוזיקה: רצועה משלה לכל שלב ולכל בוס, ועוצמה לפי כמות הצרעות
+    Sound.setTrack(musicTrack());
     Sound.duck(state === 'paused' || state === 'upgrade');
     Sound.update(G ? clamp(0.25 + G.enemies.length / 14 + (G.boss ? 0.5 : 0), 0, 1) : 0.25);
     draw();

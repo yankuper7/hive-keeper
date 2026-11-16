@@ -292,6 +292,34 @@ function drawPortrait(cv, key, def, isBoss, big) {
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
 }
+// הדבורה המנצחת, עם כתר – למסך הניצחון
+function drawVictoryBee(cv) {
+  const g = cv.getContext('2d');
+  const r = cv.height * 0.25;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.translate(cv.width / 2, cv.height / 2 + r * 0.35);
+  g.rotate(-Math.PI / 2);
+  g.globalAlpha = 0.9;
+  paintWings(g, r, BEE_COLORS, 0.25, true, false);
+  g.globalAlpha = 1;
+  paintInsectBody(g, r, BEE_COLORS, { fuzzy: true, crown: true });
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+// מחול הניצחון: שתי טבעות של דבורים שחגות סביב הכוורת בכיוונים מנוגדים
+function drawVictoryBees() {
+  const Hv = G.hive;
+  for (let i = 0; i < 14; i++) {
+    const inner = i % 2 === 0;
+    const dir = inner ? 1 : -1;
+    const a = animT * (inner ? 1.1 : 0.8) * dir + (i / 14) * TAU;
+    const R = (inner ? 105 : 165) + Math.sin(animT * 2 + i) * 10;
+    const x = Hv.x + Math.cos(a) * R, y = Hv.y + Math.sin(a) * R * 0.8;
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(x + 4, y + 11, 8, 3.5, 0, 0, TAU); ctx.fill();
+    drawInsect(x, y, a + dir * Math.PI / 2, 10, HELPER_COLORS, animT + i, { fuzzy: true, key: 'helper' });
+  }
+}
 function drawLogo() {
   const cv = $('logoBee');
   if (!cv) return;
@@ -1034,6 +1062,8 @@ function draw() {
     drawInsect(h.x, h.y, h.aim, 9, HELPER_COLORS, animT + h.ang, { fuzzy: true, key: 'helper' });
   }
 
+  if (victoryOpen) drawVictoryBees();
+
   // השחקנית
   if (state !== 'dying' || G.deathBy === 'hive') {
     // סימון המטרה הנוכחית
@@ -1088,6 +1118,22 @@ function draw() {
   drawBeams();
   drawParticles();
   drawWeather(T, dark);
+
+  // הדרכה: טבעת וחץ קופץ מעל היעד של הצעד הנוכחי
+  if (G.tut && G.tut.mark && state === 'playing') {
+    const m = G.tut.mark;
+    if (!(m.hp <= 0) && !(m.life <= 0)) {
+      const rr = (m.r || 12) + 12 + Math.sin(animT * 5) * 3;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3;
+      ctx.setLineDash([9, 7]); ctx.lineDashOffset = -animT * 24;
+      ctx.beginPath(); ctx.arc(m.x, m.y, rr, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+      const ay = m.y - rr - 14 - Math.abs(Math.sin(animT * 4)) * 10;
+      ctx.fillStyle = '#ffe14d'; ctx.strokeStyle = 'rgba(60,35,0,0.85)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(m.x, ay + 12); ctx.lineTo(m.x - 11, ay - 6); ctx.lineTo(m.x + 11, ay - 6); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+  }
 
   // חושך ותאורה בנופי הלילה
   const flash = Math.max(0, env.flash);

@@ -8,7 +8,7 @@ const ETYPES = {
              body: '#f2b705', stripe: '#1d1d1d', head: '#3a2a00', wing: 'rgba(220,235,255,0.55)', eye: '#c62828' },
   hornet:  { name: 'Hornet',       info: 'Hunts the bee. Circles, then lunges – dash away when it flashes!', hp: 16,  speed: 128, r: 12, dmg: 12, score: 15, honey: 1, target: 'bee', ai: 'hornet',
              body: '#e0452b', stripe: '#2a0e05', head: '#5a1608', wing: 'rgba(255,220,220,0.55)', eye: '#ffeb3b' },
-  brute:   { name: 'Armored Wasp', info: 'Slow and tough. Slams the hive hard and goes berserk when wounded.', hp: 115, speed: 42,  r: 22, dmg: 18, score: 40, honey: 4, target: 'hive', ai: 'brute', knock: 0.35,
+  brute:   { name: 'Armored Wasp', info: 'Slow and tough. Slams the hive hard and goes berserk when wounded.', hp: 98,  speed: 42,  r: 22, dmg: 18, score: 40, honey: 4, target: 'hive', ai: 'brute', knock: 0.35,
              body: '#7a4a12', stripe: '#1a1a1a', head: '#2b1800', wing: 'rgba(200,200,200,0.5)', eye: '#ff7043' },
   spitter: { name: 'Spitter',      info: 'Keeps its distance and spits venom. Backs away when you get close.', hp: 34,  speed: 62,  r: 15, dmg: 8,  score: 25, honey: 2, target: 'hive', ai: 'spitter',
              body: '#7cb342', stripe: '#1b3a0b', head: '#2e4d12', wing: 'rgba(220,255,220,0.55)', eye: '#ff1744' },
@@ -31,15 +31,15 @@ const GUIDE_ORDER = ['wasp', 'hornet', 'brute', 'spitter', 'thief', 'bomber', 'g
 
 // ---------------- בוסים ----------------
 const BOSSES = {
-  queen:   { name: 'Wasp Queen',   title: 'Mother of the swarm', info: 'Charges at you, calls her guard and dives at the hive. Hit her hard while she winds up a dive to stagger her.',
+  queen:   { name: 'Wasp Queen',   title: 'Mother of the swarm', tip: 'Tip: sting her hard while she winds up a dive – she staggers', info: 'Charges at you, calls her guard and dives at the hive. Hit her hard while she winds up a dive to stagger her.',
              hp: 1500, r: 46, speed: 70, dmg: 18, score: 1000, honey: 25, phases: 2,
              body: '#d81b60', stripe: '#1a1a1a', head: '#4a0020', wing: 'rgba(255,200,230,0.55)', eye: '#ffeb3b', shot: '#f48fb1',
              orbitR: 250, atkCd: 3.6, chargeSpeed: 470 },
-  general: { name: 'Wasp General', title: 'Commander of the siege', info: 'Hides behind a shield, calls air strikes and squadrons. He is exposed right after a charge – or after a buzz wave.',
+  general: { name: 'Wasp General', title: 'Commander of the siege', tip: 'Tip: his shield blocks stings – get behind him or break it with a buzz wave', info: 'Hides behind a shield, calls air strikes and squadrons. He is exposed right after a charge – or after a buzz wave.',
              hp: 2300, r: 50, speed: 75, dmg: 25, score: 2000, honey: 30, phases: 2,
              body: '#546e7a', stripe: '#c62828', head: '#1c262b', wing: 'rgba(200,230,255,0.55)', eye: '#ffca28', shot: '#90a4ae',
              orbitR: 260, atkCd: 3.1, chargeSpeed: 500 },
-  emperor: { name: 'Wasp Emperor', title: 'Lord of the wasteland', info: 'Three phases: bullet storms, teleports, a sweeping death ray and illusions.',
+  emperor: { name: 'Wasp Emperor', title: 'Lord of the wasteland', tip: 'Tip: keep moving, and dash through the death ray', info: 'Three phases: bullet storms, teleports, a sweeping death ray and illusions.',
              hp: 3600, r: 56, speed: 80, dmg: 28, score: 3000, honey: 0, phases: 3,
              body: '#4a148c', stripe: '#ffb300', head: '#1a0033', wing: 'rgba(210,190,255,0.55)', eye: '#ff1744', shot: '#ce93d8',
              orbitR: 270, atkCd: 2.7, chargeSpeed: 520 },
@@ -53,7 +53,7 @@ const BOSS_SCRIPTS = {
             ['clones', 'beam', 'teleport', 'spiral', 'strike', 'burst', 'teleport', 'beam', 'summon']],
 };
 
-// ---------------- נופים: כל כמה שלבים הרקע, מזג האוויר והמוזיקה מתחלפים ----------------
+// ---------------- נופים: כל כמה שלבים הרקע ומזג האוויר מתחלפים (למוזיקה יש רצועה לכל שלב – ראו audio.js) ----------------
 const LEVEL_THEMES = ['meadow', 'meadow', 'golden', 'golden', 'sunset', 'autumn', 'autumn', 'storm', 'frost', 'ember'];
 const themeIdFor = (level) => LEVEL_THEMES[(Math.max(1, level) - 1) % 10];
 
@@ -101,8 +101,8 @@ function levelPlan(n) {
   const intro = { 2: ['hornet'], 3: ['brute'], 4: ['spitter', 'thief'], 6: ['bomber', 'guard'], 7: ['splitter', 'nurse'] }[n] || [];
   intro.forEach((t, i) => { list[3 + i * 2] = t; if (list.length > 8 + i) list[7 + i * 3] = t; });
   // מחלקים לגלים: קבוצות שמגיעות יחד במבנה
-  const maxGroup = n <= 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 4 : 5;
-  const interval = Math.max(realN > 10 ? 0.34 : 0.42, 1.6 - n * 0.12) * D().spawn;
+  const maxGroup = n <= 3 ? 2 : n <= 6 ? 4 : 5; // גם בשלב 1 מגיעים לפעמים זוגות – אחרי ההדרכה שלב של צרעה-צרעה היה איטי מדי
+  const interval = Math.max(realN > 10 ? 0.6 : 0.75, 1.65 - n * 0.09) * D().spawn;
   const waves = [];
   let i = 0;
   const finalAt = Math.floor(total * 0.82);
@@ -123,7 +123,7 @@ function levelPlan(n) {
   return {
     waves, total: list.length,
     interval,
-    hpMul: (1 + 0.1 * (realN - 1)) * D().hp,
+    hpMul: (1 + 0.085 * (realN - 1)) * D().hp,
     speedMul: 1 + 0.035 * (Math.min(realN, 14) - 1),
     eliteChance: realN >= 9 ? Math.min(0.25, 0.07 + 0.012 * (realN - 9)) : 0,
     boss,

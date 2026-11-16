@@ -7,10 +7,12 @@ const SCALES = {
   min: [0, 2, 3, 5, 7, 8, 10],
   dor: [0, 2, 3, 5, 7, 9, 10],
   phr: [0, 1, 3, 5, 7, 8, 10],
+  hmin: [0, 2, 3, 5, 7, 8, 11],
 };
 
-// רצועות מוזיקה. כל תיבה = 16 צעדים.
+// רצועות מוזיקה. כל תיבה = 16 צעדים (או 12 כש-steps: 12 – משקל משולש, כמו ואלס/ג׳יג).
 // bass: 1=שורש 3=טרצה 5=קווינטה 8=אוקטבה · arp: 0..3 צליל באקורד · lead: דרגה בסולם (בסיס 36), '-' = המשך
+// swing: כמה לאחר כל צעד שני (0..0.3) · לכל שלב ולכל בוס יש רצועה משלו (ראו LEVEL_TRACKS ו-BOSS_TRACKS)
 const TRACKS = {
   menu: {
     bpm: 84, root: 41, scale: 'maj', prog: [0, 5, 3, 4], min: 0.2, max: 0.3,
@@ -28,6 +30,15 @@ const TRACKS = {
     lead: [['4---4-5-7---5-4-', '4-----2-1---2---', '5---5-7-9---7-5-', '7-----5-4---3-4-'],
            ['7-8-9---7-8-9---', '8---b---9-8-----', '9-8-7---5-7-9---', '8-----7-7-------']],
   },
+  // שלב 2 – אותו אחו, מנגינה קופצנית יותר
+  brook: {
+    bpm: 120, root: 41, scale: 'maj', prog: [0, 3, 4, 0], swing: 0.14,
+    bass: '1..1..5.1..1..8.', arp: '0.2.3.2.0.2.3.2.', arpWave: 'sine', leadWave: 'triangle',
+    kick: 'x.....x.x.......', snare: '....x.......x...', hat: '..x...x...x...x.',
+    form: [0, 0, 1, 0],
+    lead: [['2-4-7---4-2-4---', '5-4-3---5-7-----', '8-6-4---6-8-9---', '7-----4-7-------'],
+           ['9-9-b-9-7---4---', 'a-a-c-a-7---5---', 'b-b-d-b-8---6---', '9-----7-7-------']],
+  },
   golden: {
     bpm: 118, root: 43, scale: 'maj', prog: [0, 5, 3, 4],
     bass: '1.1.5.1.1.1.5.3.', arp: '0.1.2.3.2.1.0.1.', arpWave: 'triangle', leadWave: 'square',
@@ -35,6 +46,15 @@ const TRACKS = {
     form: [0, 0, 1, 0],
     lead: [['0-2-4---2-4-7---', '9---7---5-4-2---', '3-5-7---5-7-a---', '8---6---4-------'],
            ['7---7-9-7---4---', '5---5-7-9---7---', 'a---9-7-5---7---', '8-----6-8-------']],
+  },
+  // שלב 4 – ריקוד קציר
+  harvest: {
+    bpm: 124, root: 38, scale: 'maj', prog: [0, 4, 5, 3],
+    bass: '1.5.1.5.1.5.1.5.', arp: '..2...2...2...3.', arpWave: 'triangle', leadWave: 'square',
+    kick: 'x...x...x...x...', snare: '....x.......x..x', hat: 'x.x.x.x.x.x.x.x.',
+    form: [0, 1, 0, 1],
+    lead: [['4-2-0-2-4-4-4---', '8-6-4-6-8-8-8---', '9-7-5-7-9-a-9-7-', '5---7---5-3-----'],
+           ['7-7-9-7-b---9---', '8-8-a-8-b---8---', '9-9-c-9-e---c---', 'a---9---7-------']],
   },
   sunset: {
     bpm: 100, root: 45, scale: 'min', prog: [0, 5, 2, 6],
@@ -51,6 +71,15 @@ const TRACKS = {
     form: [0, 0, 1, -1],
     lead: [['0---2-4---2-0---', '3---5-7---5-3---', '6---4-1---4-6---', '4-----2-0-------'],
            ['7-----4-7---9---', '8-----7-5---3---', '6---8-a---8-6---', '7-----4-0-------']],
+  },
+  // שלב 7 – ג׳יג ביער, במשקל משולש
+  woods: {
+    bpm: 96, root: 40, scale: 'dor', prog: [0, 6, 3, 0], steps: 12,
+    bass: '1..1..5..1..', arp: '0.2.3.2.3.2.', arpWave: 'triangle', leadWave: 'triangle',
+    kick: 'x.....x.....', snare: '...x.....x..', hat: 'x.x.x.x.x.x.',
+    form: [0, 0, 1, -1],
+    lead: [['4--2--4-5-7-', '8--6--8-----', '7--5--3-5-7-', '4-----2--0--'],
+           ['7--9--b--9--', 'a--8--6--8--', 'a--c--a--7--', '9-----7-----']],
   },
   storm: {
     bpm: 126, root: 40, scale: 'min', prog: [0, 0, 5, 6],
@@ -76,15 +105,48 @@ const TRACKS = {
     lead: [['7---6-4---2-4---', '7---6-4---2-0---', '8---7-5---3-5---', '6---4-3---1-----'],
            ['4.4.7.4.4.4.7.4.', '2.2.4.2.2.2.4.2.', '5.5.8.5.5.5.8.5.', '6.6.8.6.a---8---']],
   },
-  boss: {
-    bpm: 146, root: 38, scale: 'min', prog: [0, 5, 6, 4], min: 0.8,
-    bass: '1.1.8.1.1.1.8.1.', arp: '0.2.3.2.0.2.3.2.', arpWave: 'square', leadWave: 'square',
-    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+  // המלכה – ואלס מלכותי ומאיים
+  queen: {
+    bpm: 132, root: 45, scale: 'hmin', prog: [0, 3, 4, 0], steps: 12, min: 0.8, leadOct: 1,
+    bass: '1.....5..5..', arp: '0.2.3.2.0.2.', arpWave: 'square', leadWave: 'square',
+    kick: 'x.....x.....', snare: '...x.....x.x', hat: 'x.x.x.x.x.x.',
     form: [0, 1, 0, 1],
-    lead: [['7-----7-9---7---', '9-----7-5-------', '8-----8-a---8---', '8-----6-4-------'],
-           ['4.7.9.7.4.7.9.7.', '5.7.9.7.5.7.9.7.', '6.8.a.8.6.8.a.8.', '4.6.8.6.b-------']],
+    lead: [['7--4--7-9-b-', 'c--a--c-----', 'b--d--b-d-f-', 'e-----b-----'],
+           ['7.7.9.7.b.9.', 'a.a.c.a.e.c.', 'b.b.d.b.f.d.', 'e--d--e-----']],
+  },
+  // הגנרל – מארש צבאי עם תוף מלחמה
+  general: {
+    bpm: 138, root: 38, scale: 'min', prog: [0, 0, 5, 4], min: 0.8,
+    bass: '1...1...1.1.5...', arp: '0.0.2.0.3.0.2.0.', arpWave: 'square', leadWave: 'sawtooth',
+    kick: 'x...x...x...x...', snare: 'x.xxx.xxx.xxx.xx', hat: '................', snareVol: 0.5,
+    form: [0, 1, 0, 1],
+    lead: [['4---4-4-7---4---', '9---7-4-7-------', '9---9-9-c---9---', '8---6-4-8-------'],
+           ['7.7.7.9.b---9---', 'b.b.b.9.7---4---', 'c.c.c.9.e---c---', 'd---b---8-------']],
+  },
+  // הקיסר – מהיר, אפל ואפי
+  emperor: {
+    bpm: 152, root: 37, scale: 'phr', prog: [0, 1, 0, 6], min: 0.85,
+    bass: '1.1.8.1.1.1.8.1.', arp: '0.2.3.2.0.2.3.2.', arpWave: 'square', leadWave: 'sawtooth',
+    kick: 'x.x.x...x.x.x...', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx',
+    form: [0, 1, 0, 1],
+    lead: [['7-----8-7---4---', '8-----a-c---a---', 'b-----9-7---9-b-', 'd---a---8-------'],
+           ['7.9.b.9.7.9.b.9.', '8.a.c.a.8.a.c.a.', '7.9.b.9.e.b.9.7.', 'd.a.8.a.d-------']],
+  },
+  // מסך הניצחון
+  victory: {
+    bpm: 126, root: 36, scale: 'maj', prog: [0, 4, 5, 3], min: 0.75, max: 0.9,
+    bass: '1...5...1...5.8.', arp: '0.1.2.3.2.1.2.3.', arpWave: 'triangle', leadWave: 'square',
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+    form: [0, 0, 1, 0],
+    lead: [['4-4-7---9-7-----', '8-8-b---8-6-----', '9-9-c---9-7-----', 'a---9---7---5---'],
+           ['b---9-7-b---e---', 'd---b-8-d-------', 'c---9-7-c---e---', 'c---a---e-------']],
   },
 };
+
+// מוזיקה שונה לכל שלב (1..10) ולכל בוס. במצב אינסופי הרצועות חוזרות בסבב
+const LEVEL_TRACKS = ['meadow', 'brook', 'golden', 'harvest', 'sunset', 'autumn', 'woods', 'storm', 'frost', 'ember'];
+const BOSS_TRACKS = { queen: 'queen', general: 'general', emperor: 'emperor' };
+const levelTrack = (level) => LEVEL_TRACKS[(Math.max(1, level) - 1) % LEVEL_TRACKS.length];
 
 const SFX_GAIN = 2.6, MUSIC_GAIN = 1.3;
 
@@ -138,6 +200,7 @@ const Sound = {
     store.set(MUTE_KEY, m);
     if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.9, this.ctx.currentTime, 0.03);
     if (typeof updateMuteButtons === 'function') updateMuteButtons();
+    if (!m) this.play('unmute');
   },
   applyVolumes() {
     if (!this.ctx) return;
@@ -220,7 +283,8 @@ const Sound = {
   play(name, x) {
     if (!this.ctx || this.muted || settings.sfx <= 0 || this.ctx.state !== 'running') return;
     const now = performance.now();
-    const gap = { shoot: 70, hit: 45, hive: 280, pickup: 45, spit: 110, kill: 40, tink: 70, zap: 80, heal: 300, poison: 200, chill: 150, boom: 60 }[name] || 0;
+    const gap = { shoot: 70, hit: 45, hive: 280, pickup: 45, spit: 110, kill: 40, tink: 70, zap: 80, heal: 300, poison: 200, chill: 150, boom: 60,
+      wave: 900, aim: 160, fuse: 240, helperShot: 110, drop: 150, split: 90, cardShow: 50, count: 45, screen: 120, firework: 90, dashFail: 180, steal: 120 }[name] || 0;
     if (gap && this.last[name] && now - this.last[name] < gap) return;
     this.last[name] = now;
     const pan = (typeof x === 'number' && typeof W === 'number' && W > 0) ? clamp((x / W - 0.5) * 1.3, -0.8, 0.8) : 0;
@@ -275,6 +339,43 @@ const Sound = {
       case 'denied': T(180, 0.15, 'square', 0.07); T(140, 0.18, 'square', 0.06, null, 0.09); break;
       case 'click': T(640, 0.04, 'square', 0.035); T(960, 0.03, 'sine', 0.03, null, 0.02); break;
       case 'over': seq([392, 330, 262, 196], 0.24, 'triangle', 0.15, 0.4); T(98, 1.2, 'sine', 0.15, null, 0.7); break;
+      // --- פעולות שלא היה להן צליל ---
+      case 'bossNear': T(70, 1.6, 'sawtooth', 0.12, 110, 0, { lp: 600 }); N(1.4, 0.07, 200); seq([220, 208, 220, 208], 0.4, 'square', 0.045, 0.3); break;
+      case 'fortify': T(196, 0.12, 'square', 0.07); T(294, 0.12, 'square', 0.07, null, 0.09); T(392, 0.28, 'triangle', 0.1, null, 0.18); N(0.08, 0.08, 900); break;
+      case 'repair': N(0.05, 0.11, 1800); N(0.05, 0.11, 1800, 0.12); T(300, 0.12, 'triangle', 0.08, 430, 0.22); break;
+      case 'healBuy': T(520, 0.12, 'sine', 0.09, 700); T(780, 0.22, 'sine', 0.08, 1040, 0.09); break;
+      case 'dashFail': T(220, 0.08, 'triangle', 0.09, 160); break;
+      case 'dashReady': T(1250, 0.05, 'sine', 0.035); T(1660, 0.07, 'sine', 0.03, null, 0.04); break;
+      case 'pulseReady': T(392, 0.1, 'triangle', 0.06); T(587, 0.18, 'triangle', 0.06, null, 0.08); break;
+      case 'wave': N(0.35, 0.13, 500, 0, { sweep: 1800, type: 'bandpass', q: 1.2 }); break;
+      case 'aim': T(900 * r, 0.1, 'square', 0.07, 1300); T(1350 * r, 0.06, 'sine', 0.04, null, 0.05); break;
+      case 'hiveAlarm': T(330, 0.12, 'square', 0.07); T(262, 0.16, 'square', 0.07, null, 0.14); break;
+      case 'beeAlarm': T(72, 0.1, 'sine', 0.22, 50); T(72, 0.1, 'sine', 0.15, 50, 0.17); break;
+      case 'buffEnd': T(900, 0.14, 'sine', 0.08, 450); break;
+      case 'comboBreak': T(500, 0.16, 'triangle', 0.08, 220); break;
+      case 'escape': seq([440, 554, 700], 0.05, 'square', 0.04, 0.07); break;
+      case 'split': T(700 * r, 0.08, 'sine', 0.05, 1100); T(900 * r, 0.08, 'sine', 0.04, 1300, 0.05); N(0.08, 0.05, 2600); break;
+      case 'clear': seq([523, 659, 784, 1046, 784, 1046, 1318], 0.09, 'triangle', 0.12, 0.22); T(262, 0.6, 'sine', 0.1, null, 0.1); break;
+      case 'pause': T(660, 0.07, 'triangle', 0.06); T(440, 0.1, 'triangle', 0.06, null, 0.07); break;
+      case 'resume': T(440, 0.07, 'triangle', 0.06); T(660, 0.1, 'triangle', 0.06, null, 0.07); break;
+      case 'unmute': T(880, 0.08, 'sine', 0.07); T(1320, 0.1, 'sine', 0.05, null, 0.06); break;
+      case 'cardShow': N(0.07, 0.06, 3000, 0, { type: 'highpass' }); T(600 * r, 0.06, 'triangle', 0.04, 900); break;
+      case 'screen': N(0.14, 0.11, 900, 0, { sweep: 2600, type: 'bandpass', q: 1 }); break;
+      case 'back': T(520, 0.05, 'square', 0.03); T(390, 0.06, 'sine', 0.03, null, 0.03); break;
+      case 'toggleOn': T(700, 0.05, 'square', 0.035); T(1050, 0.06, 'square', 0.035, null, 0.05); break;
+      case 'toggleOff': T(700, 0.05, 'square', 0.035); T(470, 0.06, 'square', 0.035, null, 0.05); break;
+      case 'fuse': T(1500, 0.04, 'square', 0.06); break;
+      case 'helperShot': T(1200 * r, 0.05, 'triangle', 0.035, 1700); break;
+      case 'honeyRain': seq([1046, 1175, 1318, 1568, 1760, 2093], 0.045, 'sine', 0.06, 0.1); break;
+      case 'drop': T(1318, 0.08, 'sine', 0.05); T(1976, 0.12, 'sine', 0.04, null, 0.06); break;
+      case 'count': T(1400 * r, 0.04, 'square', 0.05); break;
+      case 'stat': T(880, 0.06, 'triangle', 0.07); T(1320, 0.08, 'sine', 0.04, null, 0.04); break;
+      case 'fireworkUp': T(400 * r, 0.35, 'sine', 0.04, 1600); break;
+      case 'firework': N(0.5, 0.16, 1400, 0, { sweep: 300 }); T(180 * r, 0.3, 'sine', 0.12, 60); N(0.6, 0.05, 6000, 0.12, { type: 'highpass' }); break;
+      case 'tutStep': seq([784, 1046], 0.07, 'triangle', 0.09, 0.14); break;
+      case 'tutDone': seq([523, 659, 784, 1046, 1318], 0.08, 'triangle', 0.11, 0.25); break;
+      case 'summon': T(240, 0.3, 'sawtooth', 0.07, 520, 0, { lp: 1500 }); T(360, 0.3, 'square', 0.04, 780, 0.05); N(0.2, 0.05, 1200, 0, { sweep: 3000 }); break;
+      case 'reset': seq([523, 392, 262], 0.1, 'triangle', 0.08, 0.16); break;
       case 'win': seq([523, 523, 659, 784, 659, 784, 1046], 0.13, 'triangle', 0.14, 0.24); seq([262, 330, 392, 523], 0.26, 'sine', 0.1, 0.5); break;
     }
   },
@@ -301,14 +402,17 @@ const Sound = {
       // מחליפים רצועה בתחילת פעמה
       if (this.pending && this.pending !== this.track && this.step % 4 === 0) { this.track = this.pending; this.step = 0; }
       const T = TRACKS[this.track];
-      if (!this.muted && settings.music > 0) this.schedStep(T, this.nextT);
-      this.nextT += 60 / T.bpm / 4;
+      const sl = 60 / T.bpm / (T.steps === 12 ? 3 : 4);
+      // סווינג: כל צעד שני מתאחר מעט
+      const late = T.swing && this.step % 2 ? sl * T.swing : 0;
+      if (!this.muted && settings.music > 0) this.schedStep(T, this.nextT + late, sl);
+      this.nextT += sl;
       this.step++;
     }
   },
-  schedStep(T, t) {
-    const s = this.step % 16, bar = Math.floor(this.step / 16);
-    const sl = 60 / T.bpm / 4;
+  schedStep(T, t, sl) {
+    const N = T.steps || 16;
+    const s = this.step % N, bar = Math.floor(this.step / N);
     const deg = T.prog[bar % T.prog.length];
     const I = clamp(this.intensity, T.min || 0, T.max || 1);
     const M = this.musicBus;
@@ -323,7 +427,7 @@ const Sound = {
     if (s === 0) {
       for (let i = 0; i < 3; i++) {
         const f = this.midi(T, deg + i * 2, 1);
-        this.voice(M, f, t, sl * 17, 'sawtooth', 0.022, null, { lp: 500 + I * 900, attack: 0.25, hold: 0.7, detune: i % 2 ? 7 : -7 });
+        this.voice(M, f, t, sl * (N + 1), 'sawtooth', 0.022, null, { lp: 500 + I * 900, attack: 0.25, hold: 0.7, detune: i % 2 ? 7 : -7 });
       }
     }
     // ארפג׳ו
@@ -339,7 +443,7 @@ const Sound = {
       const ph = T.lead[sec][bar % 4], ch = ph[s];
       if (ch !== '.' && ch !== '-') {
         let hold = 1;
-        while (s + hold < 16 && ph[s + hold] === '-') hold++;
+        while (s + hold < N && ph[s + hold] === '-') hold++;
         const f = this.midi(T, parseInt(ch, 36), T.leadOct || 2);
         const w = T.leadWave;
         const vol = w === 'square' ? 0.032 : w === 'sawtooth' ? 0.03 : 0.07;
@@ -353,11 +457,12 @@ const Sound = {
       this.nvoice(M, t, 0.03, 0.06, 2000, null);
     }
     if (T.snare[s] === 'x' && I >= 0.45) {
-      this.nvoice(M, t, 0.13, 0.11, 1800, { type: 'highpass' });
-      this.voice(M, 200, t, 0.09, 'triangle', 0.08, 120, null);
+      const sv = T.snareVol || 1;
+      this.nvoice(M, t, 0.13, 0.11 * sv, 1800, { type: 'highpass' });
+      this.voice(M, 200, t, 0.09, 'triangle', 0.08 * sv, 120, null);
     }
     if (T.hat[s] === 'x' && I >= 0.15) this.nvoice(M, t, 0.035, 0.03 + I * 0.025, 7500, { type: 'highpass' });
     // מעבר תופים קטן כל 8 תיבות
-    if (I >= 0.6 && bar % 8 === 7 && s >= 12) this.nvoice(M, t, 0.08, 0.07 + (s - 12) * 0.015, 1500, { type: 'highpass' });
+    if (I >= 0.6 && bar % 8 === 7 && s >= N - 4) this.nvoice(M, t, 0.08, 0.07 + (s - (N - 4)) * 0.015, 1500, { type: 'highpass' });
   },
 };

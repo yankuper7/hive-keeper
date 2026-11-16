@@ -37,7 +37,7 @@ function perfSample(ms) {
 // ---------------- נופים ----------------
 const THEMES = {
   meadow: {
-    name: 'Spring Meadow', track: 'meadow', amb: 'none', seed: 11,
+    name: 'Spring Meadow', amb: 'none', seed: 11,
     ground: ['#8fcf58', '#5fa43c', '#3a7429'], light: '185,232,105', shade: '18,70,28',
     blades: ['30,85,25', '170,225,100'], bladeN: 1, dirt: '160,125,75', stone: ['#c9c9c0', '#77786f'],
     tint: [255, 255, 255, 0], dark: 0, weather: 'pollen', vignette: '0,20,0',
@@ -47,7 +47,7 @@ const THEMES = {
     props: ['clover', 'stone'], clouds: 1,
   },
   golden: {
-    name: 'Golden Fields', track: 'golden', amb: 'none', seed: 23,
+    name: 'Golden Fields', amb: 'none', seed: 23,
     ground: ['#e6d268', '#c4a842', '#8f7a2a'], light: '255,242,160', shade: '120,90,20',
     blades: ['130,100,25', '252,232,135'], bladeN: 1, dirt: '170,135,80', stone: ['#d6cfb4', '#8a8166'],
     tint: [255, 170, 60, 0.07], dark: 0, weather: 'pollen', vignette: '50,30,0',
@@ -57,7 +57,7 @@ const THEMES = {
     props: ['furrow', 'wheat', 'stone'], clouds: 1,
   },
   sunset: {
-    name: 'Sunset Orchard', track: 'sunset', amb: 'none', seed: 37,
+    name: 'Sunset Orchard', amb: 'none', seed: 37,
     ground: ['#a9b85a', '#7d9440', '#4f6a2b'], light: '255,205,125', shade: '60,45,40',
     blades: ['50,80,30', '232,212,125'], bladeN: 1, dirt: '170,120,80', stone: ['#d9c2b4', '#8a7068'],
     tint: [255, 110, 60, 0.17], dark: 0.07, weather: 'petals', vignette: '60,10,30',
@@ -67,7 +67,7 @@ const THEMES = {
     props: ['petal', 'clover', 'stone'], clouds: 0.6, fireflies: 0.6,
   },
   autumn: {
-    name: 'Autumn Woods', track: 'autumn', amb: 'wind', seed: 41,
+    name: 'Autumn Woods', amb: 'wind', seed: 41,
     ground: ['#cfa655', '#a8772f', '#6f4b20'], light: '255,216,132', shade: '70,40,10',
     blades: ['110,70,20', '226,182,92'], bladeN: 0.8, dirt: '140,100,60', stone: ['#c2b8a8', '#70675a'],
     tint: [255, 150, 70, 0.05], dark: 0.05, weather: 'leaves', vignette: '40,15,0',
@@ -77,7 +77,7 @@ const THEMES = {
     props: ['leaf', 'twig', 'stone'], clouds: 0.8,
   },
   storm: {
-    name: 'Storm Marsh', track: 'storm', amb: 'rain', seed: 53,
+    name: 'Storm Marsh', amb: 'rain', seed: 53,
     ground: ['#5f927a', '#3d6b58', '#22443a'], light: '150,212,190', shade: '5,30,30',
     blades: ['15,55,45', '122,182,152'], bladeN: 0.9, dirt: '90,95,75', stone: ['#9fb0aa', '#4f5f5a'],
     tint: [40, 60, 120, 0.16], dark: 0.3, weather: 'rain', lightning: true, vignette: '0,10,25',
@@ -87,7 +87,7 @@ const THEMES = {
     props: ['puddle', 'lily', 'stone'], clouds: 0,
   },
   frost: {
-    name: 'Frozen Night', track: 'frost', amb: 'wind', seed: 67,
+    name: 'Frozen Night', amb: 'wind', seed: 67,
     ground: ['#eef5fc', '#c8daec', '#93abc9'], light: '255,255,255', shade: '70,100,150',
     blades: ['120,150,190', '255,255,255'], bladeN: 0.25, dirt: '150,165,185', stone: ['#b7c4d4', '#66758a'],
     tint: [50, 80, 170, 0.14], dark: 0.36, weather: 'snow', vignette: '10,20,60',
@@ -97,7 +97,7 @@ const THEMES = {
     props: ['drift', 'ice', 'stone'], clouds: 0, snowcap: true,
   },
   ember: {
-    name: "Emperor's Wasteland", track: 'ember', amb: 'fire', seed: 79,
+    name: "Emperor's Wasteland", amb: 'fire', seed: 79,
     ground: ['#6b4435', '#432a22', '#221614'], light: '205,112,72', shade: '10,0,0',
     blades: ['20,12,10', '152,92,62'], bladeN: 0.3, dirt: '70,45,38', stone: ['#5a4a45', '#241b19'],
     tint: [130, 20, 10, 0.1], dark: 0.48, weather: 'embers', vignette: '30,0,0',

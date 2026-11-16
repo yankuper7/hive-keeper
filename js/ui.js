@@ -7,7 +7,7 @@ const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, mouse: false };
 
 window.addEventListener('keydown', (e) => {
   if (e.target && e.target.tagName === 'INPUT') {
-    if (e.key === 'Enter' && e.target.id === 'goName') saveScoreFromInput();
+    if (e.key === 'Enter' && (e.target.id === 'goName' || e.target.id === 'vName')) saveScoreFromInput();
     return;
   }
   keys.add(e.code);
@@ -93,10 +93,11 @@ function inputVector() {
 }
 
 // ---------------- מסכים ----------------
-const SCREENS = ['menu', 'howto', 'guide', 'lab', 'awards', 'settings', 'scores', 'upgrade', 'pause', 'gameover', 'story'];
+const SCREENS = ['menu', 'howto', 'guide', 'lab', 'awards', 'settings', 'scores', 'upgrade', 'pause', 'gameover', 'story', 'victory'];
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function showScreen(id) {
+  if (id !== 'victory') closeVictory();
   SCREENS.forEach((s) => $(s).classList.toggle('hidden', s !== id));
   const el = $(id);
   el.scrollTop = 0;
@@ -108,8 +109,10 @@ function showScreen(id) {
   else if (id === 'awards') renderAwards();
   else if (id === 'settings') syncSettings();
   else if (id === 'scores') renderScores($('scoresTable'), null);
+  if (['howto', 'guide', 'lab', 'awards', 'settings', 'scores', 'story'].includes(id)) Sound.play('screen');
 }
 function hideScreens() {
+  closeVictory();
   SCREENS.forEach((s) => $(s).classList.add('hidden'));
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
@@ -142,7 +145,7 @@ function showBanner(title, sub, secs, kicker) {
   $('bannerSub').textContent = sub || '';
   const b = $('banner');
   b.classList.remove('hidden');
-  b.classList.toggle('boss', !!kicker && kicker.includes('Boss'));
+  b.classList.toggle('boss', !!kicker && /Boss|Warning/.test(kicker));
   b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
   bannerTimer = secs;
 }
@@ -191,8 +194,8 @@ function setCd(key, el, frac) {
 function updateHud() {
   if (!G) return;
   const P = G.player, S = G.stats;
-  setText('hudLevel', String(G.level));
-  setText('hudLevelMax', G.endless ? ' ♾️' : '/10');
+  setText('hudLevel', G.tut ? '🎓' : String(G.level));
+  setText('hudLevelMax', G.tut ? '' : G.endless ? ' ♾️' : '/10');
   setText('hudScore', fmt(G.score));
   setText('hudHoney', String(G.honey));
   setBar('barBee', P.hp / S.maxHp);
@@ -221,6 +224,8 @@ function measureHud() {
   if (hud.classList.contains('hidden')) return;
   const r = $('hudBars').getBoundingClientRect();
   if (r.bottom > 0) { hudPx = Math.min(r.bottom + 6, window.innerHeight * 0.3); hudSafe = hudPx / scale; }
+  // כרטיס ההדרכה יושב מיד מתחת ל-HUD
+  $('tutorial').style.top = Math.round(hudPx + 4) + 'px';
 }
 function onResize() { measureHud(); }
 
@@ -233,6 +238,33 @@ function onStateChange(s) {
   document.body.classList.toggle('playing', s === 'playing');
   if (s !== 'playing') joy.active = false;
   if (inGame) measureHud();
+  const tut = !!(G && G.tut);
+  $('tutorial').classList.toggle('hidden', !(tut && s === 'playing'));
+  if (!tut) { $('btnPulse').classList.remove('hint'); $('btnDash').classList.remove('hint'); }
+  $('pauseNote').textContent = tut ? 'This is the tutorial – you can skip it any time.' : 'Your run is saved from the start of this level.';
+}
+
+// ---------------- כרטיס ההדרכה ----------------
+function renderTutorial() {
+  if (!G || !G.tut) return;
+  const T = G.tut, st = TUT_STEPS[T.step];
+  if (!st) return;
+  $('tutNo').textContent = `${T.step + 1}/${TUT_STEPS.length}`;
+  $('tutTitle').textContent = st.title;
+  $('tutText').textContent = st.text || (isTouch() ? st.touch : st.keys);
+  $('tutDots').innerHTML = TUT_STEPS.map((x, i) => `<i class="${i < T.step ? 'done' : i === T.step ? 'on' : ''}"></i>`).join('');
+  const card = $('tutorial').querySelector('.tut-card');
+  card.classList.remove('ok');
+  card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
+  // מדגישים את הכפתור הרלוונטי
+  $('btnPulse').classList.toggle('hint', st.id === 'pulse');
+  $('btnDash').classList.toggle('hint', st.id === 'dash');
+  $('tutorial').classList.toggle('hidden', state !== 'playing');
+}
+function tutorialStepDone() {
+  $('tutorial').querySelector('.tut-card').classList.add('ok');
+  $('btnPulse').classList.remove('hint');
+  $('btnDash').classList.remove('hint');
 }
 
 function showBossBar(def) {
@@ -241,6 +273,10 @@ function showBossBar(def) {
   $('bossNotch2').style.display = def.phases === 3 ? '' : 'none';
   $('bossNotch2').style.left = '67%';
   hudCache.barBoss = null;
+  // טיפ קצר איך להילחם בבוס – נעלם אחרי כמה שניות
+  const hint = $('bossHint');
+  hint.textContent = def.tip || '';
+  hint.style.animation = 'none'; void hint.offsetWidth; hint.style.animation = '';
   $('bossBar').classList.remove('hidden');
 }
 function hideBossBar() { $('bossBar').classList.add('hidden'); }
@@ -261,8 +297,8 @@ function openUpgrade() {
   G.offer = rollUpgrades(G.taken, 3, G.offerBoss);
   G.freeRerollsLeft = G.stats.freeRerolls || 0;
   $('upTitle').textContent = `Level ${G.level} complete! 🎉`;
-  $('upInfo').innerHTML = `Level bonus: <b>${fmt(G.lastBonus || 0)}</b> · Score: <b>${fmt(G.score)}</b><br>The hive was repaired by ${Math.round((G.lastRepair || 0.1) * 100)}% and the bee rested (+20% health).` +
-    (G.offerBoss ? '<br><b class="boss-reward">Boss defeated – the workers rebuild, and rarer cards this round!</b>' : '');
+  $('upInfo').innerHTML = `Level bonus: <b>${fmt(G.lastBonus || 0)}</b> · Score: <b>${fmt(G.score)}</b><br>Hive repaired +${Math.round((G.lastRepair || 0.1) * 100)}% · bee rested +20%` +
+    (G.offerBoss ? '<br><b class="boss-reward">Boss defeated – rarer cards this round!</b>' : '');
   renderCards();
   refreshShop();
   $('upBuild').innerHTML = buildHtml();
@@ -281,6 +317,7 @@ function renderCards() {
     b.style.animationDelay = (i * 0.07) + 's';
     b.addEventListener('click', () => chooseUpgrade(u));
     cards.appendChild(b);
+    setTimeout(() => { if (state === 'upgrade') Sound.play('cardShow'); }, 90 + i * 90);
   });
 }
 function refreshShop() {
@@ -291,6 +328,11 @@ function refreshShop() {
   bb.innerHTML = `🐝 Heal bee +40<small>${bc} 🍯 · ${Math.ceil(G.player.hp)}/${G.stats.maxHp}</small>`;
   bh.disabled = G.honey < hc || G.hive.hp >= G.hive.maxHp;
   bb.disabled = G.honey < bc || G.player.hp >= G.stats.maxHp;
+  const fh = $('buyFortHive'), fb = $('buyFortBee'), fhc = fortCost('hive'), fbc = fortCost('bee');
+  fh.innerHTML = `🏰 Fortify hive<small>+${FORT.hive.gain} max health · ${fhc} 🍯</small>`;
+  fb.innerHTML = `💛 Toughen bee<small>+${FORT.bee.gain} max health · ${fbc} 🍯</small>`;
+  fh.disabled = G.honey < fhc;
+  fb.disabled = G.honey < fbc;
   br.textContent = rc === 0 ? `🎲 Reroll cards (free ×${G.freeRerollsLeft})` : `🎲 Reroll cards (${rc} 🍯)`;
   br.disabled = G.honey < rc;
 }
@@ -298,10 +340,10 @@ function refreshShop() {
 // ---------------- סוף משחק ----------------
 function statCell(label, value) { return `<div class="stat-cell"><b>${value}</b><span>${label}</span></div>`; }
 function showGameOver(won, jelly) {
-  $('goTitle').textContent = won ? '🏆 Victory! The hive is saved!' : G.endless ? '♾️ End of the endless journey' : '💔 Game over';
-  const info = won
-    ? 'You defeated the Wasp Emperor and all 10 levels!<i>The moral: those who build with patience guard with courage, and those who only take are left with nothing.</i>'
-    : G.endless ? `${esc(G.deathReason)}, but you reached level ${G.level} in endless mode!`
+  if (won) { showVictory(jelly); return; }
+  Sound.play('over');
+  $('goTitle').textContent = G.endless ? '♾️ End of the endless journey' : '💔 Game over';
+  const info = G.endless ? `${esc(G.deathReason)}, but you reached level ${G.level} in endless mode!`
     : `${esc(G.deathReason)} on level ${G.level}.`;
   $('goInfo').innerHTML = info;
   const mm = Math.floor(G.time / 60), ss = String(Math.floor(G.time % 60)).padStart(2, '0');
@@ -310,7 +352,6 @@ function showGameOver(won, jelly) {
   const gj = $('goJelly');
   gj.classList.toggle('hidden', jelly <= 0);
   gj.innerHTML = `👑 +${jelly} royal jelly <small>(you have ${fmt(profile.jelly)} – spend it in the Hive Lab)</small>`;
-  $('btnEndless').classList.toggle('hidden', !(won && !G.endless));
   const q = qualifies(G.score);
   $('goNameBox').classList.toggle('hidden', !q);
   $('goName').value = store.get(NAME_KEY, '') || '';
@@ -320,19 +361,98 @@ function showGameOver(won, jelly) {
   if (q && !isTouch()) setTimeout(() => $('goName').focus(), 50);
 }
 
+// ---------------- מסך הניצחון ----------------
+let victoryTimers = [];
+function closeVictory() {
+  if (!victoryOpen) return;
+  victoryOpen = false;
+  victoryTimers.forEach(clearTimeout);
+  victoryTimers = [];
+  $('confetti').innerHTML = '';
+}
+function showVictory(jelly) {
+  victoryOpen = true;
+  celebT = 0.2; celebRockets = [];
+  setTheme('meadow'); // האביב חוזר לאחו
+  const later = (ms, fn) => victoryTimers.push(setTimeout(() => { if (victoryOpen) fn(); }, ms));
+  const scr = $('victory');
+  // דירוג כוכבים לפי מצב הכוורת בסוף
+  const hivePct = G.hive.hp / G.hive.maxHp;
+  const stars = 1 + (hivePct >= 0.3 ? 1 : 0) + (hivePct >= 0.65 ? 1 : 0);
+  const rank = ['Brave Defender', 'Hive Champion', 'Legend of the Hive'][stars - 1];
+  $('vStars').innerHTML = [0, 1, 2].map((i) => `<i class="${i < stars ? 'on' : ''}">★</i>`).join('');
+  $('vStars').setAttribute('aria-label', `${stars} of 3 stars`);
+  $('vRank').innerHTML = `<b>${rank}</b> · hive at ${Math.round(hivePct * 100)}% · ${DIFFS[G.diff].name}`;
+  $('vMedals').innerHTML = Object.keys(BOSSES).map((k) => `<span class="v-medal"><b>${{ queen: '👑', general: '🎖️', emperor: '🏆' }[k]}</b>${BOSSES[k].name}<i>defeated</i></span>`).join('');
+  const cells = [['Score', G.score, fmt], ['Wasps defeated', G.kills, fmt], ['Honey collected', G.honeyTotal, fmt],
+    ['Best combo', G.maxCombo, String], ['Time', G.time, (v) => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`], ['Upgrades', Object.values(G.taken).reduce((a, b) => a + b, 0), String]];
+  $('vStats').innerHTML = cells.map((c) => `<div class="stat-cell"><b>0</b><span>${c[0]}</span></div>`).join('');
+  const gj = $('vJelly');
+  gj.classList.toggle('hidden', jelly <= 0);
+  gj.innerHTML = `👑 +${jelly} royal jelly <small>(you have ${fmt(profile.jelly)} – spend it in the Hive Lab)</small>`;
+  const q = qualifies(G.score);
+  $('vNameBox').classList.toggle('hidden', !q);
+  $('vName').value = store.get(NAME_KEY, '') || '';
+  $('btnVEndless').classList.toggle('hidden', !!G.endless);
+  drawVictoryBee($('victoryBee'));
+  showScreen('victory');
+  scr.classList.remove('show-panel');
+  // קונפטי
+  const box = $('confetti');
+  let html = '';
+  for (let i = 0; i < 46; i++) {
+    const c = pick(FIREWORK_COLORS);
+    html += `<i style="left:${(Math.random() * 100).toFixed(1)}%;background:${c};animation-delay:${(Math.random() * 2.6).toFixed(2)}s;animation-duration:${(2.6 + Math.random() * 2.4).toFixed(2)}s;transform:rotate(${Math.floor(Math.random() * 360)}deg)"></i>`;
+  }
+  box.innerHTML = html;
+  Sound.play('win');
+  // שלב א׳: כותרת גדולה וזיקוקים. שלב ב׳: הלוח עם הכוכבים והנתונים
+  const reveal = () => {
+    if (scr.classList.contains('show-panel')) return;
+    scr.classList.add('show-panel');
+    scr.scrollTop = 0;
+    const starEls = $('vStars').querySelectorAll('i.on');
+    starEls.forEach((el, i) => later(350 + i * 380, () => { el.classList.add('pop'); Sound.play('power'); vibrate(15); }));
+    // הנתונים נספרים למעלה
+    const t0 = 500 + stars * 380;
+    $('vStats').querySelectorAll('.stat-cell').forEach((cell, i) => {
+      later(t0 + i * 140, () => {
+        cell.classList.add('in');
+        Sound.play('stat');
+        const b = cell.querySelector('b'), [, val, f] = cells[i];
+        const start = performance.now(), dur = 700;
+        const step = () => {
+          if (!victoryOpen) return;
+          const k = Math.min(1, (performance.now() - start) / dur);
+          b.textContent = f(val * (1 - Math.pow(1 - k, 3)));
+          if (k < 1) { if (i === 0) Sound.play('count'); requestAnimationFrame(step); }
+        };
+        step();
+        later(dur + 150, () => { b.textContent = f(val); }); // גם אם האנימציה לא רצה (לשונית ברקע) – הערך הסופי מוצג
+      });
+    });
+    if (jelly > 0) later(t0 + 1000, () => Sound.play('jelly'));
+    if (q && !isTouch()) later(t0 + 1200, () => $('vName').focus());
+  };
+  later(2600, reveal);
+  $('vSplash').onclick = reveal;
+}
+
 function saveScoreFromInput() {
   if (!G || G.saved || state !== 'over') return;
-  const name = ($('goName').value || '').trim().slice(0, 14) || 'Anonymous Bee';
+  const pre = victoryOpen ? 'v' : 'go';
+  const name = ($(pre + 'Name').value || '').trim().slice(0, 14) || 'Anonymous Bee';
   store.set(NAME_KEY, name);
   const entry = { name, score: G.score, level: G.level, won: !!G.won, diff: G.diff, date: new Date().toISOString().slice(0, 10), id: Date.now() };
   if (G.savedId) store.set(SCORES_KEY, getScores().filter((r) => r.id !== G.savedId)); // אותה ריצה – לא כפול
   addScore(entry);
   G.savedId = entry.id;
   G.saved = true;
-  $('goNameBox').classList.add('hidden');
-  renderScores($('goScores'), entry.id);
+  $(pre + 'NameBox').classList.add('hidden');
+  if (victoryOpen) toast('🏆', 'Score saved', `${name} · ${fmt(entry.score)} points`);
+  else renderScores($('goScores'), entry.id);
   Sound.play('buy');
-  $('goName').blur();
+  $(pre + 'Name').blur();
 }
 
 // ---------------- מעבדת הכוורת (שדרוגי קבע) ----------------
@@ -426,9 +546,10 @@ function toggleFullscreen() {
 }
 function resetAllProgress() {
   if (!confirm('Delete ALL saved progress?\nHigh scores, royal jelly, lab upgrades, awards and the saved run will be erased.')) return;
-  [SCORES_KEY, SAVE_KEY, PROFILE_KEY, STORY_KEY, NAME_KEY].forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
+  [SCORES_KEY, SAVE_KEY, PROFILE_KEY, STORY_KEY, NAME_KEY, TUT_KEY].forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
   profile = loadProfile();
   toast('🧹', 'Progress reset', 'A fresh hive awaits.');
+  Sound.play('reset');
   showScreen('menu');
 }
 
@@ -449,6 +570,10 @@ function bindUi() {
     diffKey = b.dataset.diff; store.set(DIFF_KEY, diffKey); updateDiffButtons();
   }));
   on('btnHowto', () => showScreen('howto'));
+  on('btnTutorial', () => {
+    G = null; startTutorial(true); // הריצה השמורה (אם יש) לא נפגעת
+  });
+  on('btnTutSkip', () => { if (G && G.tut) finishTutorial(); });
   on('btnGuide', () => showScreen('guide'));
   on('btnLab', () => showScreen('lab'));
   on('btnAwards', () => showScreen('awards'));
@@ -456,28 +581,34 @@ function bindUi() {
   on('btnSettings', () => openSettings('menu'));
   on('btnPauseSettings', () => openSettings('pause'));
   on('btnSettingsBack', closeSettings);
-  document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => { Sound.play('click'); showScreen('menu'); }));
+  document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => { Sound.play('back'); showScreen('menu'); }));
   on('btnClearScores', () => {
-    if (confirm('Delete all high scores?')) { store.set(SCORES_KEY, []); renderScores($('scoresTable'), null); }
+    if (confirm('Delete all high scores?')) { store.set(SCORES_KEY, []); renderScores($('scoresTable'), null); Sound.play('reset'); }
   });
-  ['btnMutePause', 'btnMuteHud'].forEach((id) => $(id).addEventListener('click', () => { Sound.init(); Sound.setMuted(!Sound.muted); Sound.play('click'); $(id).blur(); }));
+  ['btnMutePause', 'btnMuteHud'].forEach((id) => $(id).addEventListener('click', () => { Sound.init(); Sound.setMuted(!Sound.muted); $(id).blur(); }));
   on('btnPause', () => { pauseGame(); $('btnPause').blur(); });
   on('btnResume', resumeGame);
   on('btnQuit', toMenu);
   on('btnAgain', startGame);
-  on('btnEndless', continueEndless);
+  on('btnVEndless', continueEndless);
+  on('btnVAgain', startGame);
+  on('btnVMenu', toMenu);
+  on('btnVSave', saveScoreFromInput);
   on('btnContinue', continueRun);
   on('btnMenu', toMenu);
   on('btnSaveScore', saveScoreFromInput);
   $('buyHive').addEventListener('click', () => { if (buyRepair('hive')) refreshShop(); });
   $('buyBee').addEventListener('click', () => { if (buyRepair('bee')) refreshShop(); });
+  $('buyFortHive').addEventListener('click', () => { if (state === 'upgrade' && buyFortify('hive')) refreshShop(); });
+  $('buyFortBee').addEventListener('click', () => { if (state === 'upgrade' && buyFortify('bee')) refreshShop(); });
   $('btnReroll').addEventListener('click', () => { if (state === 'upgrade' && rerollCards()) { renderCards(); refreshShop(); } });
 
   // הגדרות
   $('setMusic').addEventListener('input', (e) => { settings.music = clamp(e.target.value / 100, 0, 1); Sound.init(); Sound.applyVolumes(); saveSettings(); });
   $('setSfx').addEventListener('input', (e) => { settings.sfx = clamp(e.target.value / 100, 0, 1); Sound.init(); Sound.applyVolumes(); saveSettings(); });
   $('setSfx').addEventListener('change', () => Sound.play('pickup'));
-  const tog = (id, key, after) => $(id).addEventListener('click', () => { settings[key] = !settings[key]; saveSettings(); syncSettings(); Sound.play('click'); if (after) after(); });
+  $('setMusic').addEventListener('change', () => Sound.play('click'));
+  const tog = (id, key, after) => $(id).addEventListener('click', () => { settings[key] = !settings[key]; saveSettings(); syncSettings(); Sound.play(settings[key] ? 'toggleOn' : 'toggleOff'); if (after) after(); });
   tog('setShake', 'shake');
   tog('setVibrate', 'vibrate', () => vibrate(30));
   tog('setNumbers', 'numbers');

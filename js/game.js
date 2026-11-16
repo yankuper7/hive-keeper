@@ -10,6 +10,7 @@ let shake = 0;
 let animT = 0;
 let timeScale = 1; // לבדיקות אוטומטיות בלבד
 let slowMo = 0;    // הילוך איטי קצר כשבוס נופל
+let victoryOpen = false; // מסך הניצחון פתוח (מוזיקת ניצחון וזיקוקים)
 
 function addShake(v) { if (settings.shake) shake = Math.max(shake, v); }
 
@@ -19,14 +20,15 @@ function newGame() {
     combo: 0, comboT: 0, maxCombo: 0, buffs: { rapid: 0, shield: 0, freeze: 0 }, hurtFlash: 0,
     diff: diffKey, endless: false, beat: false, savedId: null,
     rerolls: 0, reviveUsed: false, bossKills: 0, thiefCaught: 0, eliteSeen: false,
+    fort: { hive: 0, bee: 0 },
     paid: { jelly: 0, kills: 0, honey: 0, time: 0 },
     hive: { x: W / 2, y: H / 2, r: 46, hp: 300, maxHp: 300, hitT: 0, turretCd: 0, aim: -Math.PI / 2 },
     player: { x: W / 2, y: H / 2 + 110, r: 14, hp: 100, inv: 0, fireCd: 0, pulseCd: 0, ang: -Math.PI / 2, vx: 0, vy: 0,
               dashT: 0, dashCd: 0, dvx: 0, dvy: 0, mx: 0, my: -1, echoT: 0, dashId: 0, target: null, ghostT: 0 },
     stats: {
-      speed: 270, maxHp: 100, damage: 11, fireRate: 3.2, multishot: 1, pierce: 0,
+      speed: 270, maxHp: 100, damage: 12, fireRate: 3.2, multishot: 1, pierce: 0,
       shotSpeed: 620, range: 380, magnet: 70, regen: 0,
-      pulseDmg: 45, pulseRadius: 170, pulseCd: 11, helpers: 0, helperRate: 1, crit: 0.08, dashCd: 2.6,
+      pulseDmg: 45, pulseRadius: 170, pulseCd: 9, helpers: 0, helperRate: 1, crit: 0.08, dashCd: 2.6,
       venom: 0, frost: 0, thorns: 0, turret: 0, dashDmg: 0, sweet: 0, luck: 0,
       chain: 0, burst: 0, ricochet: 0, orbit: 0, homing: 0, echo: 0, stun: 0, rush: 0, lifesteal: 0,
       revive: 0, honeyMul: 1, shopMul: 1, freeRerolls: 0,
@@ -34,7 +36,7 @@ function newGame() {
     taken: {},
     enemies: [], stingers: [], shots: [], pickups: [], particles: [], floaters: [], rings: [], helpers: [],
     decals: [], corpses: [], marks: [], arcs: [], ghosts: [],
-    plan: null, waveT: 0, introT: 0, bossSpawned: false, boss: null, deathReason: '', deathBy: '',
+    plan: null, waveT: 0, introT: 0, bossT: 0, crowd: 1, crowdN: 0, alarmT: 0, bossSpawned: false, boss: null, deathReason: '', deathBy: '',
     lvl: { hiveDmg: 0, beeHits: 0, spawned: 0, total: 0 },
   };
 }
@@ -43,11 +45,152 @@ function startGame() {
   Sound.init();
   G = newGame();
   applyPerks(G);
+  hideScreens();
+  // בפעם הראשונה: הדרכה קצרה לפני השלב הראשון
+  if (!store.get(TUT_KEY, false)) { startTutorial(); return; }
   profile.stats.runs++;
   saveProfile();
-  hideScreens();
   startLevel(1);
 }
+
+// ---------------- הדרכה ----------------
+// שישה צעדים קצרים; כל צעד מסתיים כשהשחקן מבצע את הפעולה. בהדרכה אי אפשר להיפגע, ואפשר לדלג בכל רגע
+const TUT_STEPS = [
+  { id: 'move',  title: 'Fly',            touch: 'Drag a finger anywhere on the screen to fly.', keys: 'Fly with the arrow keys or W A S D.' },
+  { id: 'sting', title: 'Sting',          text: 'Your bee stings all by herself. Fly close to the wasp!' },
+  { id: 'honey', title: 'Collect honey',  text: 'Wasps drop honey 🍯. Fly over it – you spend it between levels.' },
+  { id: 'pulse', title: 'Buzz wave',      touch: 'Surrounded! Tap the big BUZZ WAVE button.', keys: 'Surrounded! Press SPACE for a buzz wave.' },
+  { id: 'dash',  title: 'Dash',           touch: 'Tap DASH to zip out of danger. Nothing can hurt you mid-dash.', keys: 'Press SHIFT to dash out of danger. Nothing can hurt you mid-dash.' },
+  { id: 'goal',  title: 'Guard the hive', text: 'Keep the wasps away from the hive 🏠. If the hive or the bee runs out of health, the game is over. Good luck!' },
+];
+// replay: ההדרכה הופעלה מהתפריט ("How to play") – בסופה חוזרים לתפריט ולא מתחילים ריצה חדשה (כדי לא לדרוס ריצה שמורה)
+function startTutorial(replay) {
+  Sound.init();
+  if (!G) { G = newGame(); applyPerks(G); }
+  hideScreens();
+  G.tut = { replay: replay === true, step: -1, t: 0, wait: 0, moved: 0, lx: 0, ly: 0, dash0: 0, honey0: 0, mark: null };
+  G.level = 1;
+  G.plan = { waves: [], total: 1, interval: 1, hpMul: 0.6, speedMul: 0.55, eliteChance: 0, boss: null, bossMul: 1 };
+  G.introT = 0; G.bossSpawned = false; G.boss = null; G.bossT = 0;
+  G.enemies = []; G.stingers = []; G.shots = []; G.pickups = []; G.marks = [];
+  G.lvl = { hiveDmg: 0, beeHits: 0, spawned: 0, total: 1 };
+  setTheme(themeIdFor(1));
+  const fade = $('fade'); fade.classList.remove('go'); void fade.offsetWidth; fade.classList.add('go');
+  G.hive.x = W / 2; G.hive.y = H / 2;
+  G.player.x = W / 2; G.player.y = H / 2 + 110;
+  hideBossBar();
+  $('banner').classList.add('hidden');
+  setState('playing');
+  Sound.play('start');
+  tutNext();
+}
+function tutNext() {
+  const T = G.tut, P = G.player, Hv = G.hive;
+  T.step++; T.t = 0; T.wait = 0; T.mark = null;
+  G.noFire = false;
+  if (T.step >= TUT_STEPS.length) { T.finished = true; return; } // הסיום עצמו קורה ב-tick, אחרי שעדכון הפריים הסתיים
+  const inField = (x, y) => ({ x: clamp(x, 40, W - 40), y: clamp(y, hudSafe + 40, H - 40) });
+  switch (TUT_STEPS[T.step].id) {
+    case 'move': T.moved = 0; T.lx = P.x; T.ly = P.y; break;
+    case 'sting': {
+      // צרעת אימון איטית בצד השני של הכוורת
+      const side = P.x > Hv.x ? -1 : 1;
+      const pt = inField(Hv.x + side * Math.min(250, W / 2 - 50), Hv.y + 50); // מתחת לקו האמצע, כדי שכרטיס ההדרכה לא יסתיר אותה
+      const e = spawnEnemy('wasp', pt.x, pt.y, true);
+      e.hp = e.maxHp = 40;
+      T.mark = e;
+      break;
+    }
+    case 'honey': {
+      T.honey0 = G.honeyTotal;
+      // כמה טיפות דבש במרחק קצר, כדי שיהיה צריך לעוף אליהן
+      let dx = Hv.x - P.x, dy = Hv.y + 150 - P.y;
+      const l = Math.hypot(dx, dy) || 1;
+      if (l < 60) { dx = 1; dy = 0; } else { dx /= l; dy /= l; }
+      const pt = inField(P.x + dx * 150, P.y + dy * 150);
+      for (let i = 0; i < 3; i++) dropPickup('honey', pt.x + (i - 1) * 22, pt.y, false);
+      T.mark = G.pickups[G.pickups.length - 2];
+      Sound.play('drop', pt.x);
+      break;
+    }
+    case 'pulse': {
+      // טבעת צרעות קפואות סביב הדבורה; העקיצה האוטומטית מושבתת כדי שגל הזמזום יעשה את העבודה
+      G.noFire = true;
+      P.pulseCd = 0;
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TAU + 0.3;
+        const pt = inField(P.x + Math.cos(a) * 105, P.y + Math.sin(a) * 105);
+        const e = spawnEnemy('wasp', pt.x, pt.y, true);
+        e.stun = 1e9; e.spawnT = 0.3;
+      }
+      Sound.play('warn');
+      break;
+    }
+    case 'dash': P.dashCd = 0; T.dash0 = P.dashId; break;
+    case 'goal': T.mark = Hv; break;
+  }
+  renderTutorial();
+}
+function updateTutorial(dt) {
+  const T = G.tut, P = G.player;
+  if (T.finished) return;
+  T.t += dt;
+  if (T.wait > 0) {
+    T.wait -= dt;
+    if (T.wait <= 0) tutNext();
+    return;
+  }
+  const done = (delay) => {
+    T.wait = delay;
+    if (TUT_STEPS[T.step].id !== 'goal') {
+      Sound.play('tutStep');
+      addFloater(P.x, P.y - 34, '✔ Nice!', '#b9f6ca', 22);
+      burst(P.x, P.y, 10, '#b9f6ca', 150, 'star');
+    }
+    tutorialStepDone();
+  };
+  switch (TUT_STEPS[T.step].id) {
+    case 'move':
+      T.moved += Math.hypot(P.x - T.lx, P.y - T.ly); T.lx = P.x; T.ly = P.y;
+      if (T.moved > 320) done(0.7);
+      break;
+    case 'sting':
+      if (!T.mark || T.mark.hp <= 0) done(0.8);
+      break;
+    case 'honey':
+      if (G.honeyTotal >= T.honey0 + 2) done(0.7);
+      else {
+        if (T.mark && T.mark.life <= 0) T.mark = G.pickups.find((p) => p.kind === 'honey' && p.life > 0) || null;
+        // הדבש נעלם לפני שנאסף? מפזרים שוב
+        if (!G.pickups.some((p) => p.kind === 'honey' && p.life > 0.5)) { T.step--; tutNext(); }
+      }
+      break;
+    case 'pulse':
+      if (P.pulseCd > 0) {
+        done(1.1);
+        G.noFire = false;
+        for (const e of G.enemies) { e.stun = 0; }
+      }
+      break;
+    case 'dash':
+      if (P.dashId > T.dash0) done(0.8);
+      break;
+    case 'goal':
+      if (T.t > 4.2) done(0.01);
+      break;
+  }
+}
+function finishTutorial() {
+  const replay = !!(G && G.tut && G.tut.replay);
+  store.set(TUT_KEY, true);
+  if (G) { G.tut = null; G.noFire = false; }
+  $('tutorial').classList.add('hidden');
+  Sound.play('tutDone');
+  if (replay) { toMenu(); toast('🎓', 'Tutorial complete', 'You are ready to guard the hive.'); }
+  else startGame();
+}
+
+const BOSS_PRELUDE = 8; // שניות של צרעות רגילות לפני שהבוס נכנס
 
 function startLevel(n) {
   G.level = n;
@@ -55,6 +198,8 @@ function startLevel(n) {
   G.waveT = 0;
   G.introT = 2.2;
   G.bossSpawned = false;
+  G.bossT = G.plan.boss ? BOSS_PRELUDE : 0;
+  G.bossWarned = false;
   G.boss = null;
   G.enemies = []; G.stingers = []; G.shots = []; G.rings = []; G.corpses = []; G.marks = []; G.arcs = []; G.ghosts = [];
   G.lvl = { hiveDmg: 0, beeHits: 0, spawned: 0, total: G.plan.total };
@@ -86,7 +231,7 @@ function saveRun() {
     v: 2, level: G.level, score: G.score, honey: G.honey, honeyTotal: G.honeyTotal, kills: G.kills, time: G.time,
     maxCombo: G.maxCombo, diff: G.diff, endless: G.endless, beat: G.beat, savedId: G.savedId,
     hive: { hp: G.hive.hp, maxHp: G.hive.maxHp }, php: G.player.hp, stats: G.stats, taken: G.taken,
-    rerolls: G.rerolls, reviveUsed: G.reviveUsed, bossKills: G.bossKills, thiefCaught: G.thiefCaught, paid: G.paid,
+    rerolls: G.rerolls, reviveUsed: G.reviveUsed, bossKills: G.bossKills, thiefCaught: G.thiefCaught, paid: G.paid, fort: G.fort,
   });
 }
 function loadRun() {
@@ -107,6 +252,7 @@ function continueRun() {
   for (const k in G.stats) if (typeof sv.stats[k] === 'number' && isFinite(sv.stats[k])) G.stats[k] = sv.stats[k];
   if (sv.paid && typeof sv.paid === 'object') for (const k in G.paid) G.paid[k] = Number(sv.paid[k]) || 0;
   G.taken = (sv.taken && typeof sv.taken === 'object') ? sv.taken : {};
+  if (sv.fort && typeof sv.fort === 'object') { G.fort.hive = Math.max(0, Math.floor(Number(sv.fort.hive) || 0)); G.fort.bee = Math.max(0, Math.floor(Number(sv.fort.bee) || 0)); }
   G.hive.maxHp = Number(sv.hive.maxHp) || G.hive.maxHp;
   G.hive.hp = clamp(Number(sv.hive.hp) || 1, 1, G.hive.maxHp);
   G.player.hp = clamp(Number(sv.php) || 1, 1, G.stats.maxHp);
@@ -148,7 +294,7 @@ function shiftWorld(dx, dy) {
 
 // ---------------- הישגים ----------------
 function unlock(id) {
-  if (profile.ach[id]) return;
+  if (profile.ach[id] || (G && G.tut)) return;
   const a = ACHIEVEMENTS.find((x) => x.id === id);
   if (!a) return;
   profile.ach[id] = Date.now();
@@ -161,13 +307,20 @@ function unlock(id) {
 // ---------------- יצירת אויבים ----------------
 const onScreen = (e, m = 0) => e.x >= -m && e.x <= W + m && e.y >= -m && e.y <= H + m;
 
+// מרחק מינימלי בין נקודת כניסה לכוורת. בטלפון המסך צר, ובלי זה צרעות מהצד מגיעות לכוורת בחצי מהזמן
+const MIN_SPAWN_DIST = 400;
 function edgePoint(m = 40) {
+  let p;
   switch (Math.floor(Math.random() * 4)) {
-    case 0: return { x: rand(0, W), y: -m };
-    case 1: return { x: W + m, y: rand(0, H) };
-    case 2: return { x: rand(0, W), y: H + m };
-    default: return { x: -m, y: rand(0, H) };
+    case 0: p = { x: rand(0, W), y: -m }; break;
+    case 1: p = { x: W + m, y: rand(0, H) }; break;
+    case 2: p = { x: rand(0, W), y: H + m }; break;
+    default: p = { x: -m, y: rand(0, H) };
   }
+  const hx = G ? G.hive.x : W / 2, hy = G ? G.hive.y : H / 2;
+  const dx = p.x - hx, dy = p.y - hy, d = Math.hypot(dx, dy) || 1;
+  if (d < MIN_SPAWN_DIST) { p.x = hx + (dx / d) * MIN_SPAWN_DIST; p.y = hy + (dy / d) * MIN_SPAWN_DIST; }
+  return p;
 }
 // נקודת כניסה "חכמה": הרחק מהדבורה
 function farEdgePoint() {
@@ -202,6 +355,9 @@ function spawnEnemy(type, x, y, noElite) {
   return e;
 }
 
+// כמה צרעות יכולות להיות בשדה בו-זמנית. כשהשדה מלא, הגל הבא מחכה – כך הלחץ עולה בהדרגה ולא בבת אחת
+const maxOnField = () => Math.round((10 + Math.min(G.level, 18) * 1.3) * (G.diff === 'hard' ? 1.25 : G.diff === 'easy' ? 0.9 : 1));
+
 // גל: קבוצת צרעות שנכנסת במבנה
 function spawnWave(wave) {
   const Hv = G.hive;
@@ -231,6 +387,7 @@ function spawnWave(wave) {
   }
   G.lvl.spawned += n;
   if (wave.rush) { showBanner('Final wave!', 'Hold the line', 1.6); Sound.play('warn'); }
+  else if (n >= 2) Sound.play('wave', clamp(pt.x, 0, W));
 }
 
 function spawnBoss(kind) {
@@ -258,7 +415,7 @@ function spawnBoss(kind) {
 // ---------------- פעולות שחקן ----------------
 function doDash() {
   const P = G.player;
-  if (P.dashCd > 0 || P.dashT > 0) return;
+  if (P.dashCd > 0 || P.dashT > 0) { if (P.dashT <= 0) Sound.play('dashFail'); return; }
   const v = inputVector();
   let dx = v.x, dy = v.y;
   if (!dx && !dy) { dx = P.mx || 0; dy = P.my || -1; } // בלי קלט – לכיוון התנועה האחרון
@@ -350,6 +507,9 @@ function pickTarget(x, y, range, smart) {
     if (smart) {
       if (e.shield && e.shieldDown <= 0 && Math.abs(angDiff(Math.atan2(-dy, -dx), e.ang)) < e.shieldArc) sc += 240;
       if (e.type === 'nurse') sc -= 50;
+      // מי שעוקצת את הכוורת עכשיו קודמת; הבוס הגדול לא "בולע" את הכיוון כשיש צרעות על הכוורת
+      if (e.stinging) sc -= 70;
+      else if (e.boss && G.crowdN > 0) sc += 60;
     }
     if (sc < bs) { bs = sc; best = e; }
   }
@@ -461,8 +621,8 @@ function killEnemy(e) {
     const r = Math.random();
     const heartCh = (0.035 + (P.hp < S.maxHp * 0.4 ? 0.05 : 0)) * luck;
     const powCh = (e.elite ? 0.5 : 0.045) * luck;
-    if (r < heartCh) dropPickup('heart', e.x, e.y);
-    else if (r < heartCh + powCh) dropPickup(pick(['rapid', 'shield', 'freeze']), e.x, e.y);
+    if (r < heartCh) { dropPickup('heart', e.x, e.y); Sound.play('drop', e.x); }
+    else if (r < heartCh + powCh) { dropPickup(pick(['rapid', 'shield', 'freeze']), e.x, e.y); Sound.play('drop', e.x); }
   }
   if (S.lifesteal && !isClone) {
     P.hp = Math.min(S.maxHp, P.hp + 0.6 * S.lifesteal);
@@ -482,6 +642,7 @@ function killEnemy(e) {
     }
   }
   if (d.split) {
+    Sound.play('split', e.x);
     for (let i = 0; i < d.split; i++) {
       const a = (i / d.split) * TAU + Math.random();
       const m = spawnEnemy('mini', e.x + Math.cos(a) * 14, e.y + Math.sin(a) * 14, true);
@@ -513,10 +674,11 @@ function killEnemy(e) {
 
 function hurtPlayer(dmg) {
   const P = G.player, S = G.stats;
-  if (P.inv > 0 || state !== 'playing') return;
+  if (P.inv > 0 || state !== 'playing' || G.tut) return;
   if (G.buffs.shield > 0) { P.inv = 0.25; burst(P.x, P.y, 6, '#80deea', 120, 'shard'); Sound.play('tink', P.x); return; }
   P.hp -= dmg;
   P.inv = 0.8;
+  if (G.combo >= 5) Sound.play('comboBreak');
   G.combo = 0;
   G.hurtFlash = 0.4;
   G.lvl.beeHits++;
@@ -542,7 +704,7 @@ function hurtPlayer(dmg) {
 
 function hurtHive(dmg) {
   const Hv = G.hive;
-  if (state !== 'playing') return;
+  if (state !== 'playing' || G.tut) return;
   Hv.hp -= dmg;
   Hv.hitT = 0.15;
   G.lvl.hiveDmg += dmg;
@@ -573,8 +735,15 @@ function update(dt) {
   const P = G.player, S = G.stats, Hv = G.hive, plan = G.plan;
 
   // --- שחקנית ---
-  for (const k in G.buffs) if (G.buffs[k] > 0) G.buffs[k] = Math.max(0, G.buffs[k] - dt);
-  if (G.combo > 0) { G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; }
+  for (const k in G.buffs) if (G.buffs[k] > 0) { G.buffs[k] = Math.max(0, G.buffs[k] - dt); if (G.buffs[k] <= 0) Sound.play('buffEnd'); }
+  if (G.combo > 0) { G.comboT -= dt; if (G.comboT <= 0) { if (G.combo >= 5) Sound.play('comboBreak'); G.combo = 0; } }
+  // אזעקות: כוורת או דבורה במצב קשה
+  G.alarmT -= dt;
+  if (G.alarmT <= 0 && state === 'playing') {
+    if (G.hive.hp / G.hive.maxHp < 0.3) { Sound.play('hiveAlarm', G.hive.x); G.alarmT = 1.5; }
+    else if (G.player.hp / G.stats.maxHp < 0.3) { Sound.play('beeAlarm'); G.alarmT = 1.0; }
+    else G.alarmT = 0.3;
+  }
   if (G.hurtFlash > 0) G.hurtFlash -= dt;
   const freeze = G.buffs.freeze > 0 ? 0.35 : 1;
 
@@ -584,7 +753,7 @@ function update(dt) {
   if ((v.x || v.y) && Math.random() < dt * 22 * FX) {
     addParticle({ x: P.x - v.x * 14 + rand(-4, 4), y: P.y - v.y * 14 + rand(-4, 4), vx: -v.x * 30, vy: -v.y * 30, life: 0.45, max: 0.45, r: rand(1.5, 2.6), color: '#fff6c4' });
   }
-  if (P.dashCd > 0) P.dashCd = Math.max(0, P.dashCd - dt);
+  if (P.dashCd > 0) { P.dashCd = Math.max(0, P.dashCd - dt); if (P.dashCd <= 0) Sound.play('dashReady'); }
   if (P.dashT > 0) {
     P.dashT -= dt;
     P.vx = P.dvx; P.vy = P.dvy;
@@ -594,7 +763,7 @@ function update(dt) {
   P.x = clamp(P.x + P.vx * dt, P.r, W - P.r);
   P.y = clamp(P.y + P.vy * dt, P.r + hudSafe, H - P.r);
   if (P.inv > 0) P.inv -= dt;
-  if (P.pulseCd > 0) P.pulseCd = Math.max(0, P.pulseCd - dt);
+  if (P.pulseCd > 0) { P.pulseCd = Math.max(0, P.pulseCd - dt); if (P.pulseCd <= 0) Sound.play('pulseReady'); }
   if (P.echoT > 0) { P.echoT -= dt; if (P.echoT <= 0) doPulse(0.6); }
   if (S.regen) P.hp = Math.min(S.maxHp, P.hp + S.regen * dt);
   // לא נכנסים לתוך הכוורת
@@ -608,7 +777,7 @@ function update(dt) {
   P.target = target;
   if (target) {
     P.ang = Math.atan2(target.y - P.y, target.x - P.x);
-    if (P.fireCd <= 0) {
+    if (P.fireCd <= 0 && !G.noFire) {
       let rate = S.fireRate * (G.buffs.rapid > 0 ? 2 : 1);
       if (S.rush) rate *= 1 + Math.min(20, G.combo) * 0.015 * S.rush;
       P.fireCd = 1 / rate;
@@ -628,7 +797,7 @@ function update(dt) {
     const t = pickTarget(h.x, h.y, 300, true);
     if (t) {
       h.aim = Math.atan2(t.y - h.y, t.x - h.x);
-      if (h.cd <= 0) { h.cd = 0.75 / S.helperRate; shoot(h.x, h.y, h.aim, S.damage * 0.7, 1, 520, 0, true, false); }
+      if (h.cd <= 0) { h.cd = 0.75 / S.helperRate; shoot(h.x, h.y, h.aim, S.damage * 0.7, 1, 520, 0, true, false); Sound.play('helperShot', h.x); }
     } else h.aim = h.ang + Math.PI / 2;
   }
   // --- כוורת שומרת: הכוורת עצמה יורה ---
@@ -640,6 +809,7 @@ function update(dt) {
       if (Hv.turretCd <= 0) {
         Hv.turretCd = 1.25 - 0.25 * S.turret;
         shoot(Hv.x + Math.cos(Hv.aim) * 44, Hv.y + Math.sin(Hv.aim) * 44, Hv.aim, S.damage * 0.8, 1, 540, 0, true, false);
+        Sound.play('helperShot', Hv.x);
       }
     }
   }
@@ -660,14 +830,20 @@ function update(dt) {
     }
   }
 
+  if (G.tut) updateTutorial(dt);
+
   // --- גלים ---
   if (G.introT > 0) G.introT -= dt;
   else {
-    if (plan.boss && !G.bossSpawned) spawnBoss(plan.boss);
+    if (plan.boss && !G.bossSpawned) {
+      G.bossT -= dt;
+      if (G.bossT <= 0) spawnBoss(plan.boss);
+      else if (G.bossT < 2.2 && !G.bossWarned) { G.bossWarned = true; showBanner('Something big is coming…', '', 1.8, '⚠ Warning ⚠'); Sound.play('bossNear'); }
+    }
     if (plan.waves.length) {
       G.waveT -= dt;
       if (!G.enemies.length && G.waveT > 0.5) G.waveT = 0.5; // שדה ריק – הגל הבא ממהר
-      if (G.waveT <= 0 && G.enemies.length < 34 + G.level * 2) {
+      if (G.waveT <= 0 && G.enemies.length < maxOnField()) {
         const w = plan.waves.shift();
         spawnWave(w);
         G.waveT = w.gap;
@@ -676,8 +852,15 @@ function update(dt) {
   }
 
   // --- אויבים ---
-  let allies = 0;
-  for (const e of G.enemies) if (!e.boss && e.type !== 'nurse' && e.type !== 'clone' && e.hp > 0) allies++;
+  let allies = 0, stingers = 0;
+  for (const e of G.enemies) {
+    if (!e.boss && e.type !== 'nurse' && e.type !== 'clone' && e.hp > 0) allies++;
+    if (e.stinging && e.hp > 0) stingers++;
+  }
+  // צפיפות סביב הכוורת: שלוש הראשונות עוקצות במלוא הכוח, כל צרעה נוספת מוסיפה רק חלק.
+  // כך הכוורת לא קורסת בתוך שניות כשנוצר גוש צרעות, ועדיין מסוכן להזניח אותה
+  G.crowd = stingers <= 3 ? 1 : (3 + (stingers - 3) * 0.3) / stingers;
+  G.crowdN = stingers;
   if (G.eliteNote && onScreen(G.eliteNote)) {
     addFloater(G.eliteNote.x, G.eliteNote.y - 34, '★ Elite wasp!', '#ffd54f', 20);
     Sound.play('elite', G.eliteNote.x);
@@ -814,7 +997,7 @@ function update(dt) {
         Sound.play('pickup', P.x);
       } else if (p.kind !== 'heart') {
         G.buffs[p.kind] = 7.5;
-        const label = { rapid: '⚡ x2', shield: '🛡️', freeze: '❄️' }[p.kind];
+        const label = { rapid: '⚡ Rapid sting!', shield: '🛡️ Shield!', freeze: '❄️ Wasps frozen!' }[p.kind];
         addFloater(P.x, P.y - 24, label, '#ffffff', 22);
         burst(P.x, P.y, 12, { rapid: '#ffd54f', shield: '#4dd0e1', freeze: '#bbdefb' }[p.kind], 180, 'star');
         Sound.play('power', P.x);
@@ -831,7 +1014,7 @@ function update(dt) {
   if (Hv.hitT > 0) Hv.hitT -= dt;
 
   // --- סוף שלב? ---
-  if (state === 'playing' && G.introT <= 0 && !plan.waves.length && !G.enemies.length && (!plan.boss || G.bossSpawned)) {
+  if (state === 'playing' && !G.tut && G.introT <= 0 && !plan.waves.length && !G.enemies.length && (!plan.boss || G.bossSpawned)) {
     levelClear();
   }
 }
@@ -879,7 +1062,7 @@ function updateEnemy(e, dt, slow, allies) {
         const wob = Math.sin(e.t * 4 + e.seed) * 0.6;
         const ox = wx, oy = wy; wx = ox - oy * wob; wy = oy + ox * wob;
         e.cd -= dt * slow;
-        if (pd < 180 && e.cd <= 0 && vis) { e.st = 'aim'; e.stT = 0.42; }
+        if (pd < 180 && e.cd <= 0 && vis) { e.st = 'aim'; e.stT = 0.42; Sound.play('aim', e.x); }
       } else if (e.st === 'aim') {
         const ax = P.x + P.vx * 0.2 - e.x, ay = P.y + P.vy * 0.2 - e.y;
         e.la = Math.atan2(ay, ax); face = e.la;
@@ -931,14 +1114,14 @@ function updateEnemy(e, dt, slow, allies) {
         }
         Sound.play('spit', e.x);
       }
-      if (touch) { e.stinging = true; hurtHive(e.dmg * dt); }
+      if (touch) { e.stinging = true; hurtHive(e.dmg * dt * G.crowd); }
       break;
     }
     case 'nurse': {
       // נשארת מאחור ומרפאת. כשנשארה לבד – תוקפת בעצמה
       e.lonely = allies > 0 ? 0 : e.lonely + dt;
       if (e.lonely > 4) {
-        if (touch) { e.stinging = true; spd = 0; hurtHive(e.dmg * dt); }
+        if (touch) { e.stinging = true; spd = 0; hurtHive(e.dmg * dt * G.crowd); }
         break;
       }
       const ringR = Math.min(300, Math.min(W, H) / 2 - 36);
@@ -1006,7 +1189,7 @@ function updateEnemy(e, dt, slow, allies) {
         const fx = e.ex - e.x, fy = e.ey - e.y, l = Math.hypot(fx, fy) || 1;
         wx = fx / l; wy = fy / l; spd *= 1.1;
         if (!onScreen(e, 34)) {
-          if (e.loot > 0) addFloater(clamp(e.x, 60, W - 60), clamp(e.y, hudSafe + 30, H - 30), `Stolen: -${e.loot} 🍯`, '#ff8a65', 18);
+          if (e.loot > 0) { addFloater(clamp(e.x, 60, W - 60), clamp(e.y, hudSafe + 30, H - 30), `Stolen: -${e.loot} 🍯`, '#ff8a65', 18); Sound.play('escape', clamp(e.x, 0, W)); }
           e.hp = 0; // ברחה – בלי ניקוד
           return;
         }
@@ -1038,7 +1221,11 @@ function updateEnemy(e, dt, slow, allies) {
       const wob = Math.sin(e.t * 3 + e.seed) * (heavy ? 0.15 : 0.45);
       const mx = wx, my = wy;
       wx = mx - my * wob; wy = my + mx * wob;
-      if (d.ai === 'bomber') spd *= 1 + Math.min(1, e.age / 9) * 0.45; // הפתיל בוער – היא מאיצה
+      if (d.ai === 'bomber') {
+        spd *= 1 + Math.min(1, e.age / 9) * 0.45; // הפתיל בוער – היא מאיצה
+        e.fuseT = (e.fuseT || 0) - dt;
+        if (hd < 260 && vis && e.fuseT <= 0) { e.fuseT = 0.14 + hd / 520; Sound.play('fuse', e.x); } // מתקתק מהר יותר ככל שהיא מתקרבת
+      }
       if (d.ai === 'brute') { e.rage = e.hp < e.maxHp * 0.35; if (e.rage) spd *= 1.5; }
       if (touch) {
         e.stinging = true;
@@ -1057,14 +1244,14 @@ function updateEnemy(e, dt, slow, allies) {
           e.windup = clamp((e.stT / period - 0.6) / 0.4, 0, 1);
           if (e.stT >= period) {
             e.stT = 0;
-            hurtHive(e.dmg * 1.25);
+            hurtHive(e.dmg * 1.25 * G.crowd);
             addShake(5);
             G.rings.push({ x: e.x + wx * e.r, y: e.y + wy * e.r, r: 6, max: 46, life: 0.22, t: 0, color: '255,200,120' });
             burst(e.x + mx * e.r, e.y + my * e.r, 8, '#ffcf33', 160, 'spark');
             Sound.play('slam', e.x);
           }
         } else {
-          hurtHive(e.dmg * dt * (slow > 0 ? 1 : 0));
+          hurtHive(e.dmg * dt * (slow > 0 ? 1 : 0) * G.crowd);
           if (Math.random() < dt * 4 * FX) burst(e.x + hx * 0.3, e.y + hy * 0.3, 2, '#ffcf33', 60);
         }
       }
@@ -1144,6 +1331,7 @@ function bossSummon(e, kinds) {
   if (G.enemies.length >= 40) return;
   for (const k of kinds) { const m = spawnEnemy(k, e.x + rand(-34, 34), e.y + rand(-34, 34), true); m.spawnT = 0.3; }
   burst(e.x, e.y, 12, e.def.body, 130);
+  Sound.play('summon', e.x);
 }
 
 function bossAttack(e, a, ph) {
@@ -1410,6 +1598,36 @@ function updateEffects(dt) {
   if (shake > 0) shake = Math.max(0, shake - dt * 30);
 }
 
+// ---------------- חגיגת ניצחון ----------------
+// רצה בכל פריים כשמסך הניצחון פתוח: זיקוקים מעל האחו (האפקטים הרגילים לא מתעדכנים במצב 'over')
+let celebT = 0;
+let celebRockets = [];
+const FIREWORK_COLORS = ['#ffd740', '#ff6f91', '#7ce0ff', '#b9f6ca', '#ffffff', '#ffab40', '#d7aaff'];
+function celebrate(dt) {
+  if (!G) return;
+  updateEffects(dt);
+  // זיקוקים שכבר נורו: עולים עם שובל ואז מתפוצצים
+  for (const f of celebRockets) {
+    f.t -= dt;
+    f.y -= 520 * dt;
+    addParticle({ x: f.x + rand(-2, 2), y: f.y, vx: rand(-12, 12), vy: 60, life: 0.35, max: 0.35, r: 2.2, color: '#fff3b0' });
+    if (f.t <= 0) {
+      burst(f.x, f.y, 34, f.col, 300, 'star');
+      burst(f.x, f.y, 16, '#ffffff', 190, 'spark');
+      G.rings.push({ x: f.x, y: f.y, r: 10, max: rand(70, 120), life: 0.4, t: 0, color: '255,240,180' });
+      addParticle({ x: f.x, y: f.y, vx: 0, vy: 0, life: 0.18, max: 0.18, r: 60, color: '#fff7d0', kind: 'flash' });
+      Sound.play('firework', f.x);
+    }
+  }
+  celebRockets = celebRockets.filter((f) => f.t > 0);
+  celebT -= dt;
+  if (celebT > 0) return;
+  celebT = rand(0.4, 1.0);
+  const x = rand(W * 0.08, W * 0.92), y = rand(H * 0.08, H * 0.6);
+  celebRockets.push({ x, y: y + 0.4 * 520, t: 0.4, col: pick(FIREWORK_COLORS) });
+  Sound.play('fireworkUp', x);
+}
+
 // ---------------- מעברי מצב ----------------
 function levelClear() {
   setState('clear');
@@ -1419,7 +1637,8 @@ function levelClear() {
   G.lastBonus = bonus;
   G.score += bonus;
   if (G.level >= 3 && G.lvl.hiveDmg <= 0) unlock('clean');
-  Sound.play('level');
+  Sound.play('clear');
+  if (G.pickups.some((p) => p.kind === 'honey')) Sound.play('honeyRain'); // הדבש שנשאר על הקרקע עף אל הדבורה
   showBanner('Level complete! 🎉', 'Bonus: ' + fmt(bonus), 1.7);
 }
 
@@ -1456,7 +1675,6 @@ function gameOver(by) {
 function endGame(won) {
   setState('over');
   hideBossBar();
-  Sound.play(won ? 'win' : 'over');
   clearRun();
   // ג׳לי מלכות וסטטיסטיקה – רק מה שעוד לא שולם בריצה הזאת (מצב אינסופי ממשיך את אותה ריצה)
   const cleared = won ? G.level : G.level - 1;
@@ -1483,6 +1701,7 @@ function endGame(won) {
 function pauseGame() {
   if (state !== 'playing') return;
   setState('paused');
+  Sound.play('pause');
   keys.clear();
   showScreen('pause');
 }
@@ -1490,9 +1709,11 @@ function resumeGame() {
   if (state !== 'paused') return;
   hideScreens();
   setState('playing');
+  Sound.play('resume');
   lastTime = performance.now();
 }
 function toMenu() {
+  closeVictory();
   G = null;
   slowMo = 0;
   setState('menu');
@@ -1514,7 +1735,20 @@ function buyRepair(which) {
   G.honey -= cost;
   if (which === 'hive') G.hive.hp = Math.min(G.hive.maxHp, G.hive.hp + 50);
   else G.player.hp = Math.min(G.stats.maxHp, G.player.hp + 40);
-  Sound.play('buy');
+  Sound.play(which === 'hive' ? 'repair' : 'healBuy');
+  return true;
+}
+// חיזוק קבוע (עד סוף הריצה) שנקנה בדבש – המחיר עולה בכל קנייה. נותן לדבש שנערם שימוש אמיתי
+const FORT = { hive: { base: 30, step: 15, gain: 40 }, bee: { base: 25, step: 15, gain: 20 } };
+const fortCost = (which) => shopCost(FORT[which].base + FORT[which].step * (G.fort[which] || 0));
+function buyFortify(which) {
+  const cost = fortCost(which);
+  if (G.honey < cost) { Sound.play('denied'); return false; }
+  G.honey -= cost;
+  G.fort[which] = (G.fort[which] || 0) + 1;
+  if (which === 'hive') { G.hive.maxHp += FORT.hive.gain; G.hive.hp += FORT.hive.gain; }
+  else { G.stats.maxHp += FORT.bee.gain; G.player.hp += FORT.bee.gain; }
+  Sound.play('fortify');
   return true;
 }
 function rerollCards() {
